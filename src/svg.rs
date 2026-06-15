@@ -3,6 +3,7 @@
 use crate::vec2::Vec2;
 use crate::venation::VeinGraph;
 use crate::Scalar;
+use std::fmt::Write as _;
 
 pub struct RenderOpts {
     /// Target on-screen height of the lamina, in px.
@@ -108,21 +109,19 @@ pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opt
         bx, by, px, py, opts.max_vein_px
     ));
 
-    // Draw finest veins first so majors render on top.
-    let mut order: Vec<usize> = (0..veins.edges.len()).collect();
-    order.sort_by(|&i, &j| veins.edge_order[j].cmp(&veins.edge_order[i]));
-    s.push_str("<g fill=\"none\" stroke-linecap=\"round\">\n");
-    for &e in &order {
-        let (a, b) = veins.edges[e];
-        let ord = veins.edge_order[e];
-        let (r, gg, bl) = vein_color(ord);
-        let w = vein_width(ord, opts);
-        let (x1, y1) = tx(veins.nodes[a]);
-        let (x2, y2) = tx(veins.nodes[b]);
-        s.push_str(&format!(
-            "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"rgb({},{},{})\" stroke-width=\"{:.2}\"/>\n",
-            x1, y1, x2, y2, r, gg, bl, w
-        ));
+    // Merge edges into polylines and draw finest veins first (majors on top).
+    let mut polys = veins.polylines();
+    polys.sort_by(|x, y| y.0.cmp(&x.0));
+    s.push_str("<g fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n");
+    for (ord, chain) in &polys {
+        let (r, gg, bl) = vein_color(*ord);
+        let w = vein_width(*ord, opts);
+        let _ = write!(s, "<polyline stroke=\"rgb({},{},{})\" stroke-width=\"{:.2}\" points=\"", r, gg, bl, w);
+        for &ni in chain {
+            let (x, y) = tx(veins.nodes[ni]);
+            let _ = write!(s, "{:.1},{:.1} ", x, y);
+        }
+        s.push_str("\"/>\n");
     }
     s.push_str("</g>\n</svg>\n");
     s

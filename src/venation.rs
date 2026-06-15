@@ -65,6 +65,65 @@ impl VeinGraph {
         off
     }
 
+    /// Merge edges into maximal polylines for compact rendering: each run of
+    /// same-order edges through degree-2 (within that order) nodes becomes one
+    /// chain. Appearance is identical (same points, and width/colour are
+    /// per-order so a chain is uniform); only the element count drops. Returns
+    /// (order, node-index chain) per polyline.
+    pub fn polylines(&self) -> Vec<(u8, Vec<usize>)> {
+        let n = self.nodes.len();
+        let mut adj: Vec<Vec<(usize, usize)>> = vec![Vec::new(); n];
+        for (ei, &(a, b)) in self.edges.iter().enumerate() {
+            adj[a].push((b, ei));
+            adj[b].push((a, ei));
+        }
+        let eo = &self.edge_order;
+        let order_deg = |node: usize, o: u8| adj[node].iter().filter(|&&(_, ei)| eo[ei] == o).count();
+
+        let mut used = vec![false; self.edges.len()];
+        let mut out: Vec<(u8, Vec<usize>)> = Vec::new();
+        for start in 0..self.edges.len() {
+            if used[start] {
+                continue;
+            }
+            let o = eo[start];
+            let (a, b) = self.edges[start];
+            used[start] = true;
+
+            // Walk forward from b, then backward from a, through degree-2 nodes.
+            let mut fwd = vec![b];
+            let (mut cur, mut via) = (b, start);
+            while order_deg(cur, o) == 2 {
+                match adj[cur].iter().find(|&&(_, ei)| ei != via && eo[ei] == o && !used[ei]) {
+                    Some(&(nb, ei)) => {
+                        used[ei] = true;
+                        fwd.push(nb);
+                        cur = nb;
+                        via = ei;
+                    }
+                    None => break,
+                }
+            }
+            let mut bwd = vec![a];
+            let (mut cur, mut via) = (a, start);
+            while order_deg(cur, o) == 2 {
+                match adj[cur].iter().find(|&&(_, ei)| ei != via && eo[ei] == o && !used[ei]) {
+                    Some(&(nb, ei)) => {
+                        used[ei] = true;
+                        bwd.push(nb);
+                        cur = nb;
+                        via = ei;
+                    }
+                    None => break,
+                }
+            }
+            bwd.reverse();
+            bwd.extend(fwd);
+            out.push((o, bwd));
+        }
+        out
+    }
+
     /// Node degrees (incident edge counts).
     pub fn degrees(&self) -> Vec<u32> {
         let mut deg = vec![0u32; self.nodes.len()];
@@ -195,6 +254,9 @@ pub fn grow_minor(graph: &mut VeinGraph, mut sources: Vec<Vec2>, params: &MinorP
 
     let mut dir_sum: Vec<Vec2> = Vec::new();
     let mut counts: Vec<u32> = Vec::new();
+    // Minor children per node so far: the first child continues its parent's
+    // vein (same order); later children are side-branches (order + 1).
+    let mut child_count: Vec<u32> = vec![0; graph.nodes.len()];
     let mut iters = 0usize;
     for _ in 0..params.max_iters {
         if sources.is_empty() {
@@ -225,9 +287,18 @@ pub fn grow_minor(graph: &mut VeinGraph, mut sources: Vec<Vec2>, params: &MinorP
             if n_hat.len_sq() <= 1e-18 {
                 continue;
             }
-            let order = (graph.node_order[i] + 1).clamp(2, params.max_order);
+            let po = graph.node_order[i];
+            let order = if po < 2 {
+                2 // first minor vein sprouting off a major
+            } else if child_count[i] == 0 {
+                po // continuation of the same vein
+            } else {
+                (po + 1).min(params.max_order) // side-branch → one order finer
+            };
             let pos = graph.nodes[i].add(n_hat.scale(params.step));
             let idx = graph.add_child(i, pos, order);
+            child_count[i] += 1;
+            child_count.push(0);
             grid.entry(grid_key(pos, cell)).or_default().push(idx);
             grew = true;
         }
