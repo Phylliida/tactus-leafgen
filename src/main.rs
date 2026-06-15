@@ -120,6 +120,14 @@ fn main() {
             let (ol, v, pl) = ginkgo::build_ginkgo_venation(&ginkgo::FanBlade::ginkgo(), 4, 1.5, 0.13, 7);
             finish("leaf_ginkgo", &[ol], &v, pl);
         }
+        Some("mimosa") => {
+            let leaf = compound::bipinnately_compound(seed, 5, 9);
+            finish("leaf_mimosa", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+        }
+        Some("birch") => {
+            let blade = Blade::ovate().with_margin(Margin::doubly_serrate());
+            generate(seed, &blade, SecondaryArch::Craspedodromous, true, "leaf_birch");
+        }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");

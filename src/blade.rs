@@ -30,9 +30,10 @@ const LOBE_HI: Scalar = 0.95;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MarginType {
     Entire,
-    Serrate, // forward-pointing sawtooth teeth
-    Dentate, // symmetric outward-pointing teeth
-    Crenate, // rounded scallops
+    Serrate,       // forward-pointing sawtooth teeth
+    Dentate,       // symmetric outward-pointing teeth
+    Crenate,       // rounded scallops
+    DoublySerrate, // big teeth that are themselves serrated (birch, elm)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -55,6 +56,9 @@ impl Margin {
     }
     pub fn crenate() -> Self {
         Margin { kind: MarginType::Crenate, n_teeth: 13, amp: 0.32 }
+    }
+    pub fn doubly_serrate() -> Self {
+        Margin { kind: MarginType::DoublySerrate, n_teeth: 9, amp: 0.34 }
     }
 }
 
@@ -216,6 +220,8 @@ impl Blade {
             MarginType::Crenate => 0.5 * (1.0 - (2.0 * PI * ph).cos()),
             MarginType::Dentate => 1.0 - (2.0 * ph - 1.0).abs(),
             MarginType::Serrate => ph,
+            // big sawtooth with three smaller sawteeth riding on it
+            MarginType::DoublySerrate => 0.6 * ph + 0.4 * (ph * 3.0).fract(),
         };
         self.margin.amp * prof
     }
