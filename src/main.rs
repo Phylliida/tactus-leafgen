@@ -128,6 +128,18 @@ fn main() {
             let blade = Blade::ovate().with_margin(Margin::doubly_serrate());
             generate(seed, &blade, SecondaryArch::Craspedodromous, true, "leaf_birch");
         }
+        Some("lilac") => {
+            let blade = Blade::shape(10.0, 3.4, 1.0, 2.0).with_cordate(0.16);
+            generate(seed, &blade, SecondaryArch::Brochidodromous, true, "leaf_lilac");
+        }
+        Some("holly") => {
+            let blade = Blade::shape(11.0, 3.0, 1.5, 1.8).with_margin(Margin::spinose());
+            generate(seed, &blade, SecondaryArch::Craspedodromous, true, "leaf_holly");
+        }
+        Some("elm") => {
+            let blade = Blade::ovate().with_margin(Margin::serrate()).with_asymmetry(0.45);
+            generate(seed, &blade, SecondaryArch::Craspedodromous, true, "leaf_elm");
+        }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");
