@@ -10,6 +10,7 @@ use crate::ginkgo;
 use crate::major::SecondaryArch;
 use crate::monocot;
 use crate::palmate::{self, PalmateBlade};
+use crate::peltate;
 use crate::svg::{self, RenderOpts};
 use crate::vec2::Vec2;
 use crate::venation::VeinGraph;
@@ -159,6 +160,15 @@ pub extern "C" fn generate(
         7 => {
             let leaf = compound::bipinnately_compound(seed, lobe_n.max(2), (n_sec as usize).max(3));
             (leaf.laminae, leaf.veins, leaf.petiole_len)
+        }
+        8 => {
+            let pb = peltate::PeltateBlade {
+                radius: (length * 0.55).max(3.0),
+                lobes: n_teeth as usize,
+                lobe_amp: amp,
+            };
+            let (ol, v, pl) = peltate::assemble_peltate(&pb, lobe_n.max(5), seed, 0.5, 360);
+            (vec![ol], v, pl)
         }
         _ => {
             let (ol, v) = compound::assemble(&Blade::ovate(), SecondaryArch::Brochidodromous, 7, seed, 0.55, 600);

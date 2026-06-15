@@ -45,6 +45,7 @@
       <option value="5">Monocot (parallel veins)</option>
       <option value="6">Ginkgo (dichotomous fan)</option>
       <option value="7">Mimosa (bipinnate)</option>
+      <option value="8">Peltate (center-attached)</option>
     </select></div>
 
     <div class="group">Outline</div>
@@ -113,6 +114,8 @@ const TEMPLATES = {
   "Sagittate (arrow)":{kind:0,length:12,half_width:2.4,a:0.95,b:2.6,margin:0,n_teeth:0,amp:0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:6,seed:42,cordate:0.2,asymmetry:0,base_dir:1.0,apex_notch:0},
   "Hastate (halberd)":{kind:0,length:11,half_width:2.6,a:1.0,b:2.4,margin:0,n_teeth:0,amp:0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:6,seed:42,cordate:0.16,asymmetry:0,base_dir:0.0,apex_notch:0},
   "Tulip-tree (notch)":{kind:0,length:9,half_width:3.4,a:1.9,b:1.5,margin:0,n_teeth:0,amp:0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:6,seed:42,cordate:0,asymmetry:0,base_dir:0.5,apex_notch:0.22},
+  "Lotus (peltate)":  {kind:8,length:13,half_width:3.2,a:1.5,b:1.5,margin:0,n_teeth:0,amp:0.0,lobe_n:12,lobe_depth:0.55,arch:1,n_sec:6,seed:42},
+  "Nasturtium":       {kind:8,length:12,half_width:3.2,a:1.5,b:1.5,margin:0,n_teeth:9,amp:0.06,lobe_n:9,lobe_depth:0.55,arch:1,n_sec:6,seed:42},
 };
 
 let wasm = null;
