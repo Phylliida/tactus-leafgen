@@ -14,6 +14,7 @@
 use tactus_leafgen::blade::{Blade, Margin};
 use tactus_leafgen::compound;
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
+use tactus_leafgen::ginkgo;
 use tactus_leafgen::monocot;
 use tactus_leafgen::palmate::{self, PalmateBlade};
 use tactus_leafgen::raster;
@@ -114,6 +115,10 @@ fn main() {
         Some("lily") => {
             let (ol, v, pl) = monocot::build_monocot_venation(&monocot::MonocotBlade::lily(), 15, 4);
             finish("leaf_lily", &[ol], &v, pl);
+        }
+        Some("ginkgo") => {
+            let (ol, v, pl) = ginkgo::build_ginkgo_venation(&ginkgo::FanBlade::ginkgo(), 4, 1.5, 0.13, 7);
+            finish("leaf_ginkgo", &[ol], &v, pl);
         }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
