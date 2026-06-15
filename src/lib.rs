@@ -19,6 +19,7 @@ pub mod peltate;
 pub mod venation;
 pub mod svg;
 pub mod raster;
+pub mod gallery;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

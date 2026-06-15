@@ -63,6 +63,15 @@ pub fn assemble(
     venation::grow_minor(&mut veins, blade.sample_sources(n_sources, &mut rng), &minor);
     venation::anastomose(&mut veins, &AnastomoseParams { radius: 0.17 * f, ancestor_depth: 4 });
 
+    // Keep minor veins inside the blade (they can overshoot into lobe sinuses).
+    // Majors (order < 2) are already clamped; basal-lobe veins (order 1) hang
+    // below the petiole and must not be clamped.
+    for i in 0..veins.nodes.len() {
+        if veins.node_order[i] >= 2 {
+            veins.nodes[i] = blade.clamp_inside(veins.nodes[i]);
+        }
+    }
+
     (blade.outline(outline_n), veins)
 }
 
