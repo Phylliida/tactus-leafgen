@@ -1,8 +1,8 @@
 //! Minimal SVG renderer for a generated leaf (no dependencies).
 
 use crate::blade::Blade;
-use crate::venation::{subtree_sizes, VeinNode};
 use crate::vec2::Vec2;
+use crate::venation::VeinGraph;
 use crate::Scalar;
 
 pub struct RenderOpts {
@@ -20,37 +20,52 @@ impl Default for RenderOpts {
             target_height_px: 820.0,
             pad_px: 24.0,
             petiole_frac: 0.14,
-            min_vein_px: 0.6,
+            min_vein_px: 0.5,
             max_vein_px: 5.0,
         }
     }
 }
 
-pub fn render(blade: &Blade, nodes: &[VeinNode], opts: &RenderOpts) -> String {
+/// Stroke width for a vein of the given order.
+pub fn vein_width(order: u8, o: &RenderOpts) -> Scalar {
+    let f = match order {
+        0 => 1.0,
+        1 => 0.6,
+        2 => 0.32,
+        3 => 0.2,
+        _ => 0.13,
+    };
+    (o.max_vein_px * f).max(o.min_vein_px)
+}
+
+/// Vein colour for the given order (majors darker, minors lighter).
+pub fn vein_color(order: u8) -> (u8, u8, u8) {
+    match order {
+        0 | 1 => (58, 92, 22),
+        2 => (84, 116, 40),
+        _ => (110, 142, 66),
+    }
+}
+
+pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> String {
     let petiole_len = blade.length * opts.petiole_frac;
     let world_h = blade.length + petiole_len;
     let scale = opts.target_height_px / world_h;
     let pad = opts.pad_px;
-
     let minx = -blade.half_width;
     let maxy = blade.length;
     let svg_w = (2.0 * blade.half_width) * scale + 2.0 * pad;
     let svg_h = world_h * scale + 2.0 * pad;
 
-    // World → screen (flip y so the apex is at the top).
-    let tx = |p: Vec2| -> (Scalar, Scalar) {
-        ((p.x - minx) * scale + pad, (maxy - p.y) * scale + pad)
-    };
+    let tx = |p: Vec2| -> (Scalar, Scalar) { ((p.x - minx) * scale + pad, (maxy - p.y) * scale + pad) };
 
     let mut s = String::new();
     s.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{:.0}\" height=\"{:.0}\" \
-         viewBox=\"0 0 {:.0} {:.0}\">\n",
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{:.0}\" height=\"{:.0}\" viewBox=\"0 0 {:.0} {:.0}\">\n",
         svg_w, svg_h, svg_w, svg_h
     ));
     s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#fbfdf6\"/>\n");
 
-    // Lamina outline.
     let outline = blade.outline(160);
     s.push_str("<path d=\"");
     for (i, p) in outline.iter().enumerate() {
@@ -59,28 +74,27 @@ pub fn render(blade: &Blade, nodes: &[VeinNode], opts: &RenderOpts) -> String {
     }
     s.push_str("Z\" fill=\"#e7f3d4\" stroke=\"#5a7d2a\" stroke-width=\"2\"/>\n");
 
-    // Petiole stub.
     let (bx, by) = tx(Vec2::new(0.0, 0.0));
     let (px, py) = tx(Vec2::new(0.0, -petiole_len));
     s.push_str(&format!(
-        "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" \
-         stroke=\"#5a7d2a\" stroke-width=\"{:.2}\" stroke-linecap=\"round\"/>\n",
+        "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"#3a5c16\" stroke-width=\"{:.2}\" stroke-linecap=\"round\"/>\n",
         bx, by, px, py, opts.max_vein_px
     ));
 
-    // Veins, tapered by subtree size.
-    let sizes = subtree_sizes(nodes);
-    let max_size = sizes.first().copied().unwrap_or(1).max(1) as Scalar;
-    s.push_str("<g stroke=\"#3f6418\" fill=\"none\" stroke-linecap=\"round\">\n");
-    for (i, node) in nodes.iter().enumerate() {
-        let Some(p) = node.parent else { continue };
-        let frac = (sizes[i] as Scalar / max_size).powf(0.45);
-        let w = opts.min_vein_px + (opts.max_vein_px - opts.min_vein_px) * frac;
-        let (x1, y1) = tx(node.pos);
-        let (x2, y2) = tx(nodes[p].pos);
+    // Draw finest veins first so majors render on top.
+    let mut order: Vec<usize> = (0..veins.edges.len()).collect();
+    order.sort_by(|&i, &j| veins.edge_order[j].cmp(&veins.edge_order[i]));
+    s.push_str("<g fill=\"none\" stroke-linecap=\"round\">\n");
+    for &e in &order {
+        let (a, b) = veins.edges[e];
+        let ord = veins.edge_order[e];
+        let (r, gg, bl) = vein_color(ord);
+        let w = vein_width(ord, opts);
+        let (x1, y1) = tx(veins.nodes[a]);
+        let (x2, y2) = tx(veins.nodes[b]);
         s.push_str(&format!(
-            "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke-width=\"{:.2}\"/>\n",
-            x1, y1, x2, y2, w
+            "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"rgb({},{},{})\" stroke-width=\"{:.2}\"/>\n",
+            x1, y1, x2, y2, r, gg, bl, w
         ));
     }
     s.push_str("</g>\n</svg>\n");

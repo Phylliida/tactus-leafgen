@@ -6,9 +6,9 @@
 //! image of a generated leaf.
 
 use crate::blade::Blade;
-use crate::svg::RenderOpts;
+use crate::svg::{vein_color, vein_width, RenderOpts};
 use crate::vec2::Vec2;
-use crate::venation::{subtree_sizes, VeinNode};
+use crate::venation::VeinGraph;
 use crate::Scalar;
 
 pub type Rgb = [u8; 3];
@@ -177,7 +177,7 @@ fn zlib_store(data: &[u8]) -> Vec<u8> {
 }
 
 /// Render a leaf to a `Canvas` (mirrors `svg::render`).
-pub fn render(blade: &Blade, nodes: &[VeinNode], opts: &RenderOpts) -> Canvas {
+pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> Canvas {
     let petiole_len = blade.length * opts.petiole_frac;
     let world_h = blade.length + petiole_len;
     let scale = opts.target_height_px / world_h;
@@ -199,15 +199,16 @@ pub fn render(blade: &Blade, nodes: &[VeinNode], opts: &RenderOpts) -> Canvas {
         cv.stroke(outline[i], outline[(i + 1) % outline.len()], 2.0, [90, 125, 42]);
     }
 
-    cv.stroke(tx(Vec2::new(0.0, 0.0)), tx(Vec2::new(0.0, -petiole_len)), opts.max_vein_px, [90, 125, 42]);
+    cv.stroke(tx(Vec2::new(0.0, 0.0)), tx(Vec2::new(0.0, -petiole_len)), opts.max_vein_px, [58, 92, 22]);
 
-    let sizes = subtree_sizes(nodes);
-    let max_size = sizes.first().copied().unwrap_or(1).max(1) as Scalar;
-    for (i, node) in nodes.iter().enumerate() {
-        let Some(p) = node.parent else { continue };
-        let frac = (sizes[i] as Scalar / max_size).powf(0.45);
-        let lw = opts.min_vein_px + (opts.max_vein_px - opts.min_vein_px) * frac;
-        cv.stroke(tx(node.pos), tx(nodes[p].pos), lw, [63, 100, 24]);
+    // Finest veins first so majors render on top.
+    let mut order: Vec<usize> = (0..veins.edges.len()).collect();
+    order.sort_by(|&i, &j| veins.edge_order[j].cmp(&veins.edge_order[i]));
+    for &e in &order {
+        let (a, b) = veins.edges[e];
+        let ord = veins.edge_order[e];
+        let (cr, cg, cb) = vein_color(ord);
+        cv.stroke(tx(veins.nodes[a]), tx(veins.nodes[b]), vein_width(ord, opts), [cr, cg, cb]);
     }
     cv
 }
