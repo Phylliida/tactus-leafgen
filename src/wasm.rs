@@ -94,6 +94,8 @@ pub extern "C" fn generate(
     seed: f64,
     cordate: f64,
     asymmetry: f64,
+    base_dir: f64,
+    apex_notch: f64,
 ) {
     let seed = seed as u64;
     let lobe_n = lobe_n as usize;
@@ -104,7 +106,9 @@ pub extern "C" fn generate(
             let mut blade = Blade::shape(length.max(1.0), half_width.max(0.3), a.max(0.3), b.max(0.3))
                 .with_margin(margin_of(margin as i32, n_teeth as usize, amp))
                 .with_cordate(cordate.max(0.0))
-                .with_asymmetry(asymmetry.clamp(-0.8, 0.8));
+                .with_asymmetry(asymmetry.clamp(-0.8, 0.8))
+                .with_base_dir(base_dir.clamp(0.0, 1.0))
+                .with_apex_notch(apex_notch.clamp(0.0, 0.35));
             if lobe_n > 0 {
                 blade = blade.with_lobing(Lobing::pinnate(lobe_n, lobe_depth));
             }

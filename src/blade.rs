@@ -110,6 +110,12 @@ pub struct Blade {
     /// Base asymmetry ∈ [-1, 1]: one half-base wider than the other (oblique
     /// base, e.g. elm). 0 = bilaterally symmetric.
     pub asymmetry: Scalar,
+    /// Basal lobe direction (only with cordate > 0): 0 = hastate (out),
+    /// 0.5 = cordate (down-out), 1 = sagittate (down, arrowhead).
+    pub base_dir: Scalar,
+    /// Apical notch depth as a fraction of length (0 = pointed; > 0 =
+    /// emarginate / obcordate notched tip).
+    pub apex_notch: Scalar,
 }
 
 impl Blade {
@@ -126,6 +132,8 @@ impl Blade {
             lobing: Lobing::none(),
             cordate: 0.0,
             asymmetry: 0.0,
+            base_dir: 0.5,
+            apex_notch: 0.0,
         }
     }
 
@@ -146,6 +154,16 @@ impl Blade {
 
     pub fn with_asymmetry(mut self, asym: Scalar) -> Self {
         self.asymmetry = asym;
+        self
+    }
+
+    pub fn with_base_dir(mut self, dir: Scalar) -> Self {
+        self.base_dir = dir;
+        self
+    }
+
+    pub fn with_apex_notch(mut self, notch: Scalar) -> Self {
+        self.apex_notch = notch;
         self
     }
 
@@ -181,11 +199,20 @@ impl Blade {
 
     /// Half-width at normalized midrib position `t ∈ [0, 1]`, including lobing.
     pub fn half_width_at(&self, t: Scalar) -> Scalar {
-        if t <= 0.0 || t >= 1.0 {
+        if t <= 0.0 {
             return 0.0;
         }
+        // A notched tip needs nonzero width at the apex so it can split.
+        let apex_floor = if self.apex_notch > 0.0 {
+            0.16 * self.half_width * ((t - 0.8) / 0.2).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        if t >= 1.0 {
+            return apex_floor;
+        }
         let smooth = self.half_width * t.powf(self.a) * (1.0 - t).powf(self.b) / self.peak;
-        smooth * self.lobe_factor(t)
+        smooth.max(apex_floor) * self.lobe_factor(t)
     }
 
     /// Lobing multiplier ∈ [1−depth, 1]: 1 at lobe tips, 1−depth at sinuses.
@@ -289,6 +316,9 @@ impl Blade {
             let t = t0 + (1.0 - t0) * i as Scalar / samples as Scalar;
             pts.push(self.margin_pt(t, 1.0));
         }
+        if self.apex_notch > 0.0 {
+            pts.push(Vec2::new(0.0, self.length * (1.0 - self.apex_notch))); // apical sinus
+        }
         for i in (0..=samples).rev() {
             let t = t0 + (1.0 - t0) * i as Scalar / samples as Scalar;
             pts.push(self.margin_pt(t, -1.0));
@@ -299,12 +329,32 @@ impl Blade {
         pts
     }
 
+    /// Bézier control point for a basal lobe (direction set by `base_dir`).
+    fn base_lobe_ctrl(&self, side: Scalar, t0: Scalar) -> Vec2 {
+        let bw = self.half_width_side(t0, side);
+        // base_dir: 0 hastate (out, shallow) → 1 sagittate (down, deep)
+        let cx = 1.9 + (0.45 - 1.9) * self.base_dir;
+        let cy = 0.55 + (1.7 - 0.55) * self.base_dir;
+        Vec2::new(side * bw * cx, -self.cordate * self.length * cy)
+    }
+
+    /// Tip of a basal lobe (for routing a vein into it), if cordate.
+    pub fn basal_lobe_tip(&self, side: Scalar) -> Option<Vec2> {
+        if self.cordate <= 0.0 {
+            return None;
+        }
+        let t0 = 0.12;
+        let bw = self.half_width_side(t0, side);
+        let blade_base = Vec2::new(side * bw, t0 * self.length);
+        Some(bez(Vec2::new(0.0, 0.0), self.base_lobe_ctrl(side, t0), blade_base, 0.5))
+    }
+
     /// One basal lobe curve (quadratic Bézier bulging below the petiole).
     fn base_lobe(&self, side: Scalar, t0: Scalar, entering: bool) -> Vec<Vec2> {
         let sinus = Vec2::new(0.0, 0.0);
         let bw = self.half_width_side(t0, side);
         let blade_base = Vec2::new(side * bw, t0 * self.length);
-        let ctrl = Vec2::new(side * bw * 1.3, -self.cordate * self.length);
+        let ctrl = self.base_lobe_ctrl(side, t0);
         let n = 12;
         let mut v = Vec::with_capacity(n);
         if entering {
