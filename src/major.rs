@@ -70,14 +70,6 @@ fn bezier(o: Vec2, c: Vec2, a: Vec2, n: usize) -> Vec<Vec2> {
         .collect()
 }
 
-/// Clamp a point inside the blade body, so veins never arc past the margin
-/// (matters for narrow leaves where Bézier controls/loop bows overshoot).
-fn clamp_in(blade: &Blade, p: Vec2) -> Vec2 {
-    let y = p.y.clamp(0.0, blade.length);
-    let w = blade.half_width_at((y / blade.length).clamp(0.0, 1.0)) * 0.99;
-    Vec2::new(p.x.clamp(-w, w), y)
-}
-
 /// Add a polyline of `pts` (whose first element is the existing node `start`)
 /// to the graph as a chain of `order` edges; return the last node's index.
 fn add_chain(g: &mut VeinGraph, start: usize, pts: &[Vec2], order: u8) -> usize {
@@ -169,7 +161,7 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
             let c = o.add(d0.scale(dist * 0.55));
             let pts: Vec<Vec2> = bezier(o, c, a, p.sec_samples)
                 .into_iter()
-                .map(|q| clamp_in(blade, q))
+                .map(|q| blade.clamp_inside(q))
                 .collect();
             let last = add_chain(&mut g, origin, &pts, 1);
             anchors[si].push(last);
@@ -204,7 +196,7 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
                 // chain interior points (clamped inside), then close onto w[1]
                 let mut prev = w[0];
                 for q in pts.iter().take(pts.len() - 1).skip(1) {
-                    let idx = g.add_node(clamp_in(blade, *q), 1);
+                    let idx = g.add_node(blade.clamp_inside(*q), 1);
                     g.add_edge(prev, idx, 1);
                     prev = idx;
                 }

@@ -273,6 +273,15 @@ impl Blade {
         Vec2::new(side * self.half_width_side(t, side), t * self.length)
     }
 
+    /// Clamp a point into the blade body (just inside the margin), so veins
+    /// never arc past the edge or into a lobe sinus. (Basal cordate lobes hang
+    /// below y=0 and are excluded — don't clamp those veins.)
+    pub fn clamp_inside(&self, p: Vec2) -> Vec2 {
+        let y = p.y.clamp(0.0, self.length);
+        let w = self.half_width_at((y / self.length).clamp(0.0, 1.0)) * 0.99;
+        Vec2::new(p.x.clamp(-w, w), y)
+    }
+
     /// Outward unit normal to the smooth margin at `t` on the given side.
     fn normal(&self, t: Scalar, side: Scalar) -> Vec2 {
         let dt = 1e-3;
