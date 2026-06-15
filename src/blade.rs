@@ -202,9 +202,11 @@ impl Blade {
         if t <= 0.0 {
             return 0.0;
         }
-        // A notched tip needs nonzero width at the apex so it can split.
+        // A notched tip needs nonzero width at the apex so it can split. The
+        // floor ramps up from the apical sinus (1 − apex_notch) to the tip.
         let apex_floor = if self.apex_notch > 0.0 {
-            0.16 * self.half_width * ((t - 0.8) / 0.2).clamp(0.0, 1.0)
+            let sinus_t = 1.0 - self.apex_notch;
+            0.16 * self.half_width * ((t - sinus_t) / self.apex_notch).clamp(0.0, 1.0)
         } else {
             0.0
         };
@@ -249,8 +251,22 @@ impl Blade {
         if p.y < 0.0 || p.y > self.length {
             return false;
         }
+        let t = p.y / self.length;
         let side = if p.x >= 0.0 { 1.0 } else { -1.0 };
-        p.x.abs() <= self.half_width_side(p.y / self.length, side)
+        if p.x.abs() > self.half_width_side(t, side) {
+            return false;
+        }
+        // Carve out the apical notch (the V cut into the top centre).
+        if self.apex_notch > 0.0 {
+            let sinus_t = 1.0 - self.apex_notch;
+            if t > sinus_t {
+                let x_notch = 0.16 * self.half_width * (t - sinus_t) / self.apex_notch;
+                if p.x.abs() < x_notch {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     fn smooth_pt(&self, t: Scalar, side: Scalar) -> Vec2 {
