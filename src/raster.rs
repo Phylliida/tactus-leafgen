@@ -5,9 +5,8 @@
 //! crates, no system rasterizer needed — so we can always produce a viewable
 //! image of a generated leaf.
 
-use crate::svg::{vein_color, vein_width, RenderOpts};
+use crate::svg::{vein_color, vein_width, RenderOpts, Scene};
 use crate::vec2::Vec2;
-use crate::venation::VeinGraph;
 use crate::Scalar;
 
 pub type Rgb = [u8; 3];
@@ -194,8 +193,8 @@ fn zlib_store(data: &[u8]) -> Vec<u8> {
 
 /// Render a leaf from its lamina polygons + vein graph (shape-agnostic; mirrors
 /// `svg::render`). The petiole runs from (0,0) down by `petiole_len`.
-pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opts: &RenderOpts) -> Canvas {
-    let (minx, miny, maxx, maxy) = crate::svg::scene_bounds(laminae, veins, petiole_len);
+pub fn render(scene: &Scene, opts: &RenderOpts) -> Canvas {
+    let (minx, miny, maxx, maxy) = crate::svg::scene_bounds(scene);
     let world_h = (maxy - miny).max(1e-6);
     let world_w = (maxx - minx).max(1e-6);
     let scale = opts.target_height_px / world_h;
@@ -209,24 +208,25 @@ pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opt
 
     let mut cv = Canvas::new(w, h, [251, 253, 246]);
 
-    for poly in laminae {
-        let outline: Vec<(Scalar, Scalar)> = poly.iter().map(|p| tx(*p)).collect();
-        cv.fill_polygon(&outline, [231, 243, 212]);
+    // Petiole/stem first (behind everything).
+    cv.stroke(tx(Vec2::new(0.0, 0.0)), tx(Vec2::new(0.0, -scene.petiole_len)), opts.max_vein_px, scene.petiole_color);
+
+    for lam in &scene.laminae {
+        let outline: Vec<(Scalar, Scalar)> = lam.points.iter().map(|p| tx(*p)).collect();
+        cv.fill_polygon(&outline, lam.fill);
         for i in 0..outline.len() {
-            cv.stroke(outline[i], outline[(i + 1) % outline.len()], 2.0, [90, 125, 42]);
+            cv.stroke(outline[i], outline[(i + 1) % outline.len()], 2.0, lam.stroke);
         }
     }
 
-    cv.stroke(tx(Vec2::new(0.0, 0.0)), tx(Vec2::new(0.0, -petiole_len)), opts.max_vein_px, [58, 92, 22]);
-
     // Finest veins first so majors render on top.
+    let veins = &scene.veins;
     let mut order: Vec<usize> = (0..veins.edges.len()).collect();
     order.sort_by(|&i, &j| veins.edge_order[j].cmp(&veins.edge_order[i]));
     for &e in &order {
         let (a, b) = veins.edges[e];
         let ord = veins.edge_order[e];
-        let (cr, cg, cb) = vein_color(ord);
-        cv.stroke(tx(veins.nodes[a]), tx(veins.nodes[b]), vein_width(ord, opts), [cr, cg, cb]);
+        cv.stroke(tx(veins.nodes[a]), tx(veins.nodes[b]), vein_width(ord, opts), vein_color(scene.vein_base, ord));
     }
     cv
 }

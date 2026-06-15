@@ -13,6 +13,7 @@
 
 use tactus_leafgen::blade::{Blade, Margin};
 use tactus_leafgen::compound;
+use tactus_leafgen::flower::{self, FlowerParams};
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
 use tactus_leafgen::ginkgo;
 use tactus_leafgen::monocot;
@@ -24,10 +25,10 @@ use tactus_leafgen::svg::{self, RenderOpts};
 use tactus_leafgen::vec2::Vec2;
 use tactus_leafgen::venation::{self, AnastomoseParams, MinorParams, VeinGraph};
 
-fn finish(stem: &str, laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: f64) {
+fn render_scene(stem: &str, scene: &svg::Scene) {
     let opts = RenderOpts::default();
-    std::fs::write(format!("{stem}.svg"), svg::render(laminae, veins, petiole_len, &opts)).expect("svg");
-    let canvas = raster::render(laminae, veins, petiole_len, &opts);
+    std::fs::write(format!("{stem}.svg"), svg::render(scene, &opts)).expect("svg");
+    let canvas = raster::render(scene, &opts);
     if std::env::var("LEAF_ZOOM").is_ok() {
         let (cw, ch) = (canvas.w, canvas.h);
         canvas
@@ -36,7 +37,12 @@ fn finish(stem: &str, laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: f64
             .expect("zoom png");
     }
     canvas.write_png(&format!("{stem}.png")).expect("png");
-    println!("{stem}: {} nodes, {} edges", veins.nodes.len(), veins.edges.len());
+    println!("{stem}: {} nodes, {} edges", scene.veins.nodes.len(), scene.veins.edges.len());
+}
+
+/// Render a green leaf from its outline polygons + veins.
+fn finish(stem: &str, laminae: Vec<Vec<Vec2>>, veins: VeinGraph, petiole_len: f64) {
+    render_scene(stem, &svg::Scene::leaf(laminae, veins, petiole_len));
 }
 
 fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &str) {
@@ -51,12 +57,12 @@ fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &
     }
 
     let petiole_len = blade.length * RenderOpts::default().petiole_frac;
-    finish(stem, &[blade.outline(900)], &veins, petiole_len);
+    finish(stem, vec![blade.outline(900)], veins, petiole_len);
 }
 
 fn generate_palmate(seed: u64, blade: &PalmateBlade, stem: &str) {
     let (outline, veins, petiole_len) = palmate::assemble_palmate(blade, seed, 1.0, 800);
-    finish(stem, &[outline], &veins, petiole_len);
+    finish(stem, vec![outline], veins, petiole_len);
 }
 
 fn main() {
@@ -99,31 +105,31 @@ fn main() {
         }
         Some("ash") => {
             let leaf = compound::pinnately_compound(seed, 5, 1.0);
-            finish("leaf_ash", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+            finish("leaf_ash", leaf.laminae, leaf.veins, leaf.petiole_len);
         }
         Some("horsechestnut") => {
             let leaf = compound::palmately_compound(seed, 7, 115.0, 1.0);
-            finish("leaf_horsechestnut", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+            finish("leaf_horsechestnut", leaf.laminae, leaf.veins, leaf.petiole_len);
         }
         Some("clover") => {
             let leaf = compound::palmately_compound(seed, 3, 38.0, 1.0);
-            finish("leaf_clover", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+            finish("leaf_clover", leaf.laminae, leaf.veins, leaf.petiole_len);
         }
         Some("grass") => {
             let (ol, v, pl) = monocot::build_monocot_venation(&monocot::MonocotBlade::grass(), 11, 6);
-            finish("leaf_grass", &[ol], &v, pl);
+            finish("leaf_grass", vec![ol], v, pl);
         }
         Some("lily") => {
             let (ol, v, pl) = monocot::build_monocot_venation(&monocot::MonocotBlade::lily(), 15, 4);
-            finish("leaf_lily", &[ol], &v, pl);
+            finish("leaf_lily", vec![ol], v, pl);
         }
         Some("ginkgo") => {
             let (ol, v, pl) = ginkgo::build_ginkgo_venation(&ginkgo::FanBlade::ginkgo(), 4, 1.5, 0.13, 7);
-            finish("leaf_ginkgo", &[ol], &v, pl);
+            finish("leaf_ginkgo", vec![ol], v, pl);
         }
         Some("mimosa") => {
             let leaf = compound::bipinnately_compound(seed, 5, 9);
-            finish("leaf_mimosa", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+            finish("leaf_mimosa", leaf.laminae, leaf.veins, leaf.petiole_len);
         }
         Some("birch") => {
             let blade = Blade::ovate().with_margin(Margin::doubly_serrate());
@@ -155,12 +161,15 @@ fn main() {
         }
         Some("lotus") => {
             let (ol, v, pl) = peltate::assemble_peltate(&peltate::PeltateBlade::lotus(), 12, seed, 1.0, 360);
-            finish("leaf_lotus", &[ol], &v, pl);
+            finish("leaf_lotus", vec![ol], v, pl);
         }
         Some("nasturtium") => {
             let (ol, v, pl) = peltate::assemble_peltate(&peltate::PeltateBlade::nasturtium(), 9, seed, 1.0, 360);
-            finish("leaf_nasturtium", &[ol], &v, pl);
+            finish("leaf_nasturtium", vec![ol], v, pl);
         }
+        Some("daisy") => render_scene("flower_daisy", &flower::build_flower(&FlowerParams::daisy())),
+        Some("buttercup") => render_scene("flower_buttercup", &flower::build_flower(&FlowerParams::buttercup())),
+        Some("rose") => render_scene("flower_rose", &flower::build_flower(&FlowerParams::rose())),
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");
@@ -184,24 +193,26 @@ fn main() {
             let t = Instant::now();
             venation::anastomose(&mut v, &AnastomoseParams::default());
             let t_ana = t.elapsed();
+            let n_edges = v.edges.len();
             let t = Instant::now();
-            let svg = svg::render(&[blade.outline(900)], &v, 1.4, &opts);
+            let svg = svg::render(&svg::Scene::leaf(vec![blade.outline(900)], v, 1.4), &opts);
             let t_svg = t.elapsed();
             println!(
                 "ovate ({} edges): major {:?}  grow_minor {:?}  anastomose {:?}  svg {:?} ({} KB)",
-                v.edges.len(), t_major, t_minor, t_ana, t_svg, svg.len() / 1024
+                n_edges, t_major, t_minor, t_ana, t_svg, svg.len() / 1024
             );
 
             // ash (compound) assembly vs svg.
             let t = Instant::now();
             let leaf = compound::pinnately_compound(42, 5, 1.0);
             let t_ash = t.elapsed();
+            let n_edges2 = leaf.veins.edges.len();
             let t = Instant::now();
-            let svg = svg::render(&leaf.laminae, &leaf.veins, leaf.petiole_len, &opts);
+            let svg = svg::render(&svg::Scene::leaf(leaf.laminae, leaf.veins, leaf.petiole_len), &opts);
             let t_svg2 = t.elapsed();
             println!(
                 "ash   ({} edges): assemble {:?}  svg {:?} ({} KB)",
-                leaf.veins.edges.len(), t_ash, t_svg2, svg.len() / 1024
+                n_edges2, t_ash, t_svg2, svg.len() / 1024
             );
         }
         other => {
