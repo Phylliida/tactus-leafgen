@@ -5,7 +5,6 @@
 //! crates, no system rasterizer needed — so we can always produce a viewable
 //! image of a generated leaf.
 
-use crate::blade::Blade;
 use crate::svg::{vein_color, vein_width, RenderOpts};
 use crate::vec2::Vec2;
 use crate::venation::VeinGraph;
@@ -193,16 +192,15 @@ fn zlib_store(data: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Render a leaf to a `Canvas` (mirrors `svg::render`).
-pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> Canvas {
-    let petiole_len = blade.length * opts.petiole_frac;
-    let world_h = blade.length + petiole_len;
+/// Render a leaf from its outline polygon + vein graph (shape-agnostic; mirrors
+/// `svg::render`). The petiole runs from (0,0) down by `petiole_len`.
+pub fn render(outline_world: &[Vec2], veins: &VeinGraph, petiole_len: Scalar, opts: &RenderOpts) -> Canvas {
+    let (minx, miny, maxx, maxy) = crate::svg::scene_bounds(outline_world, veins, petiole_len);
+    let world_h = (maxy - miny).max(1e-6);
+    let world_w = (maxx - minx).max(1e-6);
     let scale = opts.target_height_px / world_h;
     let pad = opts.pad_px;
-    let ext = blade.half_extent();
-    let minx = -ext;
-    let maxy = blade.length;
-    let w = ((2.0 * ext) * scale + 2.0 * pad).ceil() as usize;
+    let w = (world_w * scale + 2.0 * pad).ceil() as usize;
     let h = (world_h * scale + 2.0 * pad).ceil() as usize;
 
     let tx = |p: Vec2| -> (Scalar, Scalar) {
@@ -211,7 +209,7 @@ pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> Canvas {
 
     let mut cv = Canvas::new(w, h, [251, 253, 246]);
 
-    let outline: Vec<(Scalar, Scalar)> = blade.outline(900).iter().map(|p| tx(*p)).collect();
+    let outline: Vec<(Scalar, Scalar)> = outline_world.iter().map(|p| tx(*p)).collect();
     cv.fill_polygon(&outline, [231, 243, 212]);
     for i in 0..outline.len() {
         cv.stroke(outline[i], outline[(i + 1) % outline.len()], 2.0, [90, 125, 42]);
