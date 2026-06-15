@@ -75,9 +75,7 @@ fn bezier(o: Vec2, c: Vec2, a: Vec2, n: usize) -> Vec<Vec2> {
 fn add_chain(g: &mut VeinGraph, start: usize, pts: &[Vec2], order: u8) -> usize {
     let mut prev = start;
     for p in pts.iter().skip(1) {
-        let idx = g.add_node(*p, order);
-        g.add_edge(prev, idx, order);
-        prev = idx;
+        prev = g.add_child(prev, *p, order);
     }
     prev
 }
