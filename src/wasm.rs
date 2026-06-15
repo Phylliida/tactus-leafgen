@@ -6,7 +6,7 @@
 
 use crate::blade::{Blade, Lobing, Margin, MarginType};
 use crate::compound;
-use crate::flower::{self, FlowerParams};
+use crate::flower::{self, FloralFormula};
 use crate::ginkgo;
 use crate::major::SecondaryArch;
 use crate::monocot;
@@ -106,18 +106,15 @@ pub extern "C" fn generate(
     // Flowers (kind 9): colors from a preset (via the teeth slot), shape/count
     // from the petal-shape sliders. Returns a colored Scene directly.
     if kind as i32 == 9 {
-        let base = match n_teeth as i32 {
-            1 => FlowerParams::buttercup(),
-            2 => FlowerParams::rose(),
-            _ => FlowerParams::daisy(),
-        };
-        let fp = FlowerParams {
-            n_petals: lobe_n.max(3),
-            petal: Blade::shape(length.max(1.0), half_width.max(0.2), a.max(0.3), b.max(0.3)),
-            center_radius: (lobe_depth * 4.0).max(0.5),
-            ..base
-        };
-        store(svg::render(&flower::build_flower(&fp), &opts));
+        let formula = match n_teeth as i32 {
+            1 => FloralFormula::buttercup(),
+            2 => FloralFormula::rose(),
+            3 => FloralFormula::sunflower(),
+            4 => FloralFormula::lily(),
+            _ => FloralFormula::daisy(),
+        }
+        .with_petal_count(lobe_n.max(3));
+        store(svg::render(&flower::build(&formula), &opts));
         return;
     }
 
