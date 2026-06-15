@@ -16,6 +16,7 @@ pub mod compound;
 pub mod monocot;
 pub mod ginkgo;
 pub mod peltate;
+pub mod flower;
 pub mod venation;
 pub mod svg;
 pub mod raster;

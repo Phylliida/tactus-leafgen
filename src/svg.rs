@@ -1,12 +1,55 @@
-//! Minimal SVG renderer for a generated leaf (no dependencies).
+//! Minimal SVG renderer (no dependencies). Renders a `Scene`: a set of colored
+//! filled regions (`Lamina`s — leaf blades or flower petals/centers) plus a
+//! vein graph and a petiole/stem.
 
 use crate::vec2::Vec2;
 use crate::venation::VeinGraph;
 use crate::Scalar;
 use std::fmt::Write as _;
 
+pub type Rgb = [u8; 3];
+
+/// A filled region: a leaf lamina, a flower petal, a floral disk, etc.
+pub struct Lamina {
+    pub points: Vec<Vec2>,
+    pub fill: Rgb,
+    pub stroke: Rgb,
+}
+
+impl Lamina {
+    /// A leaf-green lamina (the default for leaves).
+    pub fn leaf(points: Vec<Vec2>) -> Self {
+        Lamina { points, fill: [231, 243, 212], stroke: [90, 125, 42] }
+    }
+    pub fn new(points: Vec<Vec2>, fill: Rgb, stroke: Rgb) -> Self {
+        Lamina { points, fill, stroke }
+    }
+}
+
+/// A complete drawable: colored regions + veins + a petiole/stem from (0,0) down.
+pub struct Scene {
+    pub laminae: Vec<Lamina>,
+    pub veins: VeinGraph,
+    pub vein_base: Rgb,
+    pub petiole_len: Scalar,
+    pub petiole_color: Rgb,
+}
+
+impl Scene {
+    /// A green leaf scene from outline polygons + veins.
+    pub fn leaf(outlines: Vec<Vec<Vec2>>, veins: VeinGraph, petiole_len: Scalar) -> Self {
+        Scene {
+            laminae: outlines.into_iter().map(Lamina::leaf).collect(),
+            veins,
+            vein_base: [58, 92, 22],
+            petiole_len,
+            petiole_color: [58, 92, 22],
+        }
+    }
+}
+
 pub struct RenderOpts {
-    /// Target on-screen height of the lamina, in px.
+    /// Target on-screen height, in px.
     pub target_height_px: Scalar,
     pub pad_px: Scalar,
     pub petiole_frac: Scalar,
@@ -26,7 +69,6 @@ impl Default for RenderOpts {
     }
 }
 
-/// Stroke width for a vein of the given order.
 pub fn vein_width(order: u8, o: &RenderOpts) -> Scalar {
     let f = match order {
         0 => 1.0,
@@ -38,17 +80,28 @@ pub fn vein_width(order: u8, o: &RenderOpts) -> Scalar {
     (o.max_vein_px * f).max(o.min_vein_px)
 }
 
-/// Vein colour for the given order (majors darker, minors lighter).
-pub fn vein_color(order: u8) -> (u8, u8, u8) {
-    match order {
-        0 | 1 => (58, 92, 22),
-        2 => (84, 116, 40),
-        _ => (110, 142, 66),
-    }
+fn tint(c: Rgb, f: Scalar) -> Rgb {
+    let f = f.clamp(0.0, 1.0);
+    [
+        (c[0] as Scalar + (255.0 - c[0] as Scalar) * f) as u8,
+        (c[1] as Scalar + (255.0 - c[1] as Scalar) * f) as u8,
+        (c[2] as Scalar + (255.0 - c[2] as Scalar) * f) as u8,
+    ]
 }
 
-/// Bounding box (minx, miny, maxx, maxy) of the laminae + veins + petiole tip.
-pub fn scene_bounds(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar) -> (Scalar, Scalar, Scalar, Scalar) {
+/// Vein colour for a given order: the scene's base, lightened for finer orders.
+pub fn vein_color(base: Rgb, order: u8) -> Rgb {
+    let f = match order {
+        0 | 1 => 0.0,
+        2 => 0.3,
+        3 => 0.5,
+        _ => 0.62,
+    };
+    tint(base, f)
+}
+
+/// Bounding box (minx, miny, maxx, maxy) of the scene.
+pub fn scene_bounds(scene: &Scene) -> (Scalar, Scalar, Scalar, Scalar) {
     let mut mnx = Scalar::INFINITY;
     let mut mny = Scalar::INFINITY;
     let mut mxx = -Scalar::INFINITY;
@@ -59,24 +112,21 @@ pub fn scene_bounds(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scala
         mxx = mxx.max(p.x);
         mxy = mxy.max(p.y);
     };
-    for poly in laminae {
-        for p in poly {
+    for lam in &scene.laminae {
+        for p in &lam.points {
             acc(*p);
         }
     }
-    for p in &veins.nodes {
+    for p in &scene.veins.nodes {
         acc(*p);
     }
     acc(Vec2::new(0.0, 0.0));
-    acc(Vec2::new(0.0, -petiole_len));
+    acc(Vec2::new(0.0, -scene.petiole_len));
     (mnx, mny, mxx, mxy)
 }
 
-/// Render a leaf from its lamina polygons + vein graph (shape-agnostic: simple,
-/// lobed, palmate, or compound — compound leaves pass one polygon per leaflet).
-/// The petiole runs from (0,0) down by `petiole_len`.
-pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opts: &RenderOpts) -> String {
-    let (minx, miny, maxx, maxy) = scene_bounds(laminae, veins, petiole_len);
+pub fn render(scene: &Scene, opts: &RenderOpts) -> String {
+    let (minx, miny, maxx, maxy) = scene_bounds(scene);
     let world_h = (maxy - miny).max(1e-6);
     let world_w = (maxx - minx).max(1e-6);
     let scale = opts.target_height_px / world_h;
@@ -85,6 +135,7 @@ pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opt
     let svg_h = world_h * scale + 2.0 * pad;
 
     let tx = |p: Vec2| -> (Scalar, Scalar) { ((p.x - minx) * scale + pad, (maxy - p.y) * scale + pad) };
+    let rgb = |c: Rgb| format!("rgb({},{},{})", c[0], c[1], c[2]);
 
     let mut s = String::new();
     s.push_str(&format!(
@@ -93,32 +144,33 @@ pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opt
     ));
     s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#fbfdf6\"/>\n");
 
-    for poly in laminae {
+    // Petiole/stem first (behind everything).
+    let (bx, by) = tx(Vec2::new(0.0, 0.0));
+    let (pxp, pyp) = tx(Vec2::new(0.0, -scene.petiole_len));
+    let _ = write!(
+        s,
+        "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"{}\" stroke-width=\"{:.2}\" stroke-linecap=\"round\"/>\n",
+        bx, by, pxp, pyp, rgb(scene.petiole_color), opts.max_vein_px
+    );
+
+    for lam in &scene.laminae {
         s.push_str("<path d=\"");
-        for (i, p) in poly.iter().enumerate() {
+        for (i, p) in lam.points.iter().enumerate() {
             let (x, y) = tx(*p);
-            s.push_str(&format!("{}{:.2} {:.2} ", if i == 0 { "M" } else { "L" }, x, y));
+            let _ = write!(s, "{}{:.2} {:.2} ", if i == 0 { "M" } else { "L" }, x, y);
         }
-        s.push_str("Z\" fill=\"#e7f3d4\" stroke=\"#5a7d2a\" stroke-width=\"2\"/>\n");
+        let _ = write!(s, "Z\" fill=\"{}\" stroke=\"{}\" stroke-width=\"2\"/>\n", rgb(lam.fill), rgb(lam.stroke));
     }
 
-    let (bx, by) = tx(Vec2::new(0.0, 0.0));
-    let (px, py) = tx(Vec2::new(0.0, -petiole_len));
-    s.push_str(&format!(
-        "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"#3a5c16\" stroke-width=\"{:.2}\" stroke-linecap=\"round\"/>\n",
-        bx, by, px, py, opts.max_vein_px
-    ));
-
-    // Merge edges into polylines and draw finest veins first (majors on top).
-    let mut polys = veins.polylines();
+    // Veins as merged polylines, finest first so majors render on top.
+    let mut polys = scene.veins.polylines();
     polys.sort_by(|x, y| y.0.cmp(&x.0));
     s.push_str("<g fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n");
     for (ord, chain) in &polys {
-        let (r, gg, bl) = vein_color(*ord);
         let w = vein_width(*ord, opts);
-        let _ = write!(s, "<polyline stroke=\"rgb({},{},{})\" stroke-width=\"{:.2}\" points=\"", r, gg, bl, w);
+        let _ = write!(s, "<polyline stroke=\"{}\" stroke-width=\"{:.2}\" points=\"", rgb(vein_color(scene.vein_base, *ord)), w);
         for &ni in chain {
-            let (x, y) = tx(veins.nodes[ni]);
+            let (x, y) = tx(scene.veins.nodes[ni]);
             let _ = write!(s, "{:.1},{:.1} ", x, y);
         }
         s.push_str("\"/>\n");
