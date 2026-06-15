@@ -14,6 +14,7 @@
 use tactus_leafgen::blade::{Blade, Margin};
 use tactus_leafgen::compound;
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
+use tactus_leafgen::monocot;
 use tactus_leafgen::palmate::{self, PalmateBlade};
 use tactus_leafgen::raster;
 use tactus_leafgen::rng::Rng;
@@ -105,6 +106,14 @@ fn main() {
         Some("clover") => {
             let leaf = compound::palmately_compound(seed, 3, 38.0, 1.0);
             finish("leaf_clover", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+        }
+        Some("grass") => {
+            let (ol, v, pl) = monocot::build_monocot_venation(&monocot::MonocotBlade::grass(), 11, 6);
+            finish("leaf_grass", &[ol], &v, pl);
+        }
+        Some("lily") => {
+            let (ol, v, pl) = monocot::build_monocot_venation(&monocot::MonocotBlade::lily(), 15, 4);
+            finish("leaf_lily", &[ol], &v, pl);
         }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
