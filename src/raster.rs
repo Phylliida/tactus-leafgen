@@ -199,9 +199,10 @@ pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> Canvas {
     let world_h = blade.length + petiole_len;
     let scale = opts.target_height_px / world_h;
     let pad = opts.pad_px;
-    let minx = -blade.half_width;
+    let ext = blade.half_extent();
+    let minx = -ext;
     let maxy = blade.length;
-    let w = ((2.0 * blade.half_width) * scale + 2.0 * pad).ceil() as usize;
+    let w = ((2.0 * ext) * scale + 2.0 * pad).ceil() as usize;
     let h = (world_h * scale + 2.0 * pad).ceil() as usize;
 
     let tx = |p: Vec2| -> (Scalar, Scalar) {
@@ -210,7 +211,7 @@ pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> Canvas {
 
     let mut cv = Canvas::new(w, h, [251, 253, 246]);
 
-    let outline: Vec<(Scalar, Scalar)> = blade.outline(220).iter().map(|p| tx(*p)).collect();
+    let outline: Vec<(Scalar, Scalar)> = blade.outline(900).iter().map(|p| tx(*p)).collect();
     cv.fill_polygon(&outline, [231, 243, 212]);
     for i in 0..outline.len() {
         cv.stroke(outline[i], outline[(i + 1) % outline.len()], 2.0, [90, 125, 42]);
