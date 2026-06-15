@@ -13,7 +13,7 @@
 
 use tactus_leafgen::blade::{Blade, Margin};
 use tactus_leafgen::compound;
-use tactus_leafgen::flower::{self, FlowerParams};
+use tactus_leafgen::flower::{self, FloralFormula};
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
 use tactus_leafgen::ginkgo;
 use tactus_leafgen::monocot;
@@ -32,7 +32,7 @@ fn render_scene(stem: &str, scene: &svg::Scene) {
     if std::env::var("LEAF_ZOOM").is_ok() {
         let (cw, ch) = (canvas.w, canvas.h);
         canvas
-            .crop(cw / 8, ch * 9 / 20, cw * 2 / 5, ch / 4)
+            .crop(cw * 3 / 8, ch * 5 / 16, cw / 4, cw / 4)
             .write_png(&format!("{stem}_zoom.png"))
             .expect("zoom png");
     }
@@ -167,9 +167,11 @@ fn main() {
             let (ol, v, pl) = peltate::assemble_peltate(&peltate::PeltateBlade::nasturtium(), 9, seed, 1.0, 360);
             finish("leaf_nasturtium", vec![ol], v, pl);
         }
-        Some("daisy") => render_scene("flower_daisy", &flower::build_flower(&FlowerParams::daisy())),
-        Some("buttercup") => render_scene("flower_buttercup", &flower::build_flower(&FlowerParams::buttercup())),
-        Some("rose") => render_scene("flower_rose", &flower::build_flower(&FlowerParams::rose())),
+        Some("daisy") => render_scene("flower_daisy", &flower::build(&FloralFormula::daisy())),
+        Some("buttercup") => render_scene("flower_buttercup", &flower::build(&FloralFormula::buttercup())),
+        Some("rose") => render_scene("flower_rose", &flower::build(&FloralFormula::rose())),
+        Some("sunflower") => render_scene("flower_sunflower", &flower::build(&FloralFormula::sunflower())),
+        Some("lilyflower") => render_scene("flower_lily", &flower::build(&FloralFormula::lily())),
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");
