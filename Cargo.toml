@@ -1,0 +1,12 @@
+[package]
+name = "tactus-leafgen"
+version = "0.1.0"
+edition = "2021"
+description = "Procedural leaf generator (venation + blade morphology)"
+
+# No verification yet — this is the pure-Rust prototype phase.
+# Later: depend on tactus vstd and verify the lib through the Lean backend.
+[dependencies]
+
+[profile.release]
+opt-level = 3
