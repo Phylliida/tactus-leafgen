@@ -84,17 +84,25 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
     let mut g = VeinGraph::new();
     let l = blade.length;
 
-    // Secondary origin parameters.
-    let sec_ts: Vec<Scalar> = (0..p.n_secondaries)
-        .map(|i| {
-            let f = if p.n_secondaries == 1 {
-                0.5
-            } else {
-                i as Scalar / (p.n_secondaries as Scalar - 1.0)
-            };
-            p.first_t + (p.last_t - p.first_t) * f
-        })
-        .collect();
+    // Secondary origins: one per lobe tip if lobed, else evenly spaced.
+    let lobe_ts = blade.lobe_centers();
+    let lobed = !lobe_ts.is_empty();
+    let sec_ts: Vec<Scalar> = if lobed {
+        lobe_ts
+    } else {
+        (0..p.n_secondaries)
+            .map(|i| {
+                let f = if p.n_secondaries == 1 {
+                    0.5
+                } else {
+                    i as Scalar / (p.n_secondaries as Scalar - 1.0)
+                };
+                p.first_t + (p.last_t - p.first_t) * f
+            })
+            .collect()
+    };
+    // Lobed leaves run a vein straight to each lobe tip (craspedodromous).
+    let arch = if lobed { SecondaryArch::Craspedodromous } else { p.arch };
 
     // Midrib node parameters: uniform samples ∪ secondary origins, sorted.
     let mut ts: Vec<Scalar> = (0..=p.midrib_samples)
@@ -129,11 +137,15 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
         let origin = find_mid(t_i);
         let o = g.nodes[origin];
         for (si, &s) in [1.0 as Scalar, -1.0].iter().enumerate() {
-            // Cap the anchor below the thin apex so secondaries don't curl back
-            // toward the midrib into a teardrop.
-            let t_a = (t_i + (1.0 - t_i) * p.reach_frac).min(0.84);
+            // Lobed: anchor at the lobe tip (same height). Else cap below the
+            // thin apex so secondaries don't curl back into a teardrop.
+            let t_a = if lobed {
+                t_i
+            } else {
+                (t_i + (1.0 - t_i) * p.reach_frac).min(0.84)
+            };
             let margin_w = blade.half_width_at(t_a);
-            let inset = match p.arch {
+            let inset = match arch {
                 SecondaryArch::Craspedodromous => 0.0,
                 SecondaryArch::Brochidodromous => p.margin_gap,
                 SecondaryArch::Eucamptodromous => p.margin_gap * 2.2,
@@ -149,7 +161,7 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
     }
 
     // Brochidodromous: join adjacent anchors with outward-bowed arches.
-    if p.arch == SecondaryArch::Brochidodromous {
+    if arch == SecondaryArch::Brochidodromous {
         for side in &anchors {
             for w in side.windows(2) {
                 let a0 = g.nodes[w[0]];

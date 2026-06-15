@@ -84,6 +84,9 @@ fn main() {
                 generate(seed, &Blade::ovate().with_margin(m), arch, true, name);
             }
         }
+        Some("oak") => {
+            generate(seed, &Blade::oak(), SecondaryArch::Craspedodromous, true, "leaf_oak");
+        }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");
