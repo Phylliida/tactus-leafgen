@@ -52,14 +52,8 @@ fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &
 }
 
 fn generate_palmate(seed: u64, blade: &PalmateBlade, stem: &str) {
-    let mut veins = palmate::build_palmate_major(blade);
-    let mut rng = Rng::new(seed);
-    let sources = blade.sample_sources(5000, &mut rng);
-    venation::grow_minor(&mut veins, sources, &MinorParams::default());
-    venation::anastomose(&mut veins, &AnastomoseParams::default());
-
-    let petiole_len = blade.lengths.iter().cloned().fold(0.0_f64, f64::max) * 0.18;
-    finish(stem, &[blade.outline(800)], &veins, petiole_len);
+    let (outline, veins, petiole_len) = palmate::assemble_palmate(blade, seed, 1.0, 800);
+    finish(stem, &[outline], &veins, petiole_len);
 }
 
 fn main() {
@@ -101,15 +95,15 @@ fn main() {
             generate_palmate(seed, &PalmateBlade::maple(), "leaf_maple");
         }
         Some("ash") => {
-            let leaf = compound::pinnately_compound(seed);
+            let leaf = compound::pinnately_compound(seed, 5, 1.0);
             finish("leaf_ash", &leaf.laminae, &leaf.veins, leaf.petiole_len);
         }
         Some("horsechestnut") => {
-            let leaf = compound::palmately_compound(seed, 7, 115.0);
+            let leaf = compound::palmately_compound(seed, 7, 115.0, 1.0);
             finish("leaf_horsechestnut", &leaf.laminae, &leaf.veins, leaf.petiole_len);
         }
         Some("clover") => {
-            let leaf = compound::palmately_compound(seed, 3, 38.0);
+            let leaf = compound::palmately_compound(seed, 3, 38.0, 1.0);
             finish("leaf_clover", &leaf.laminae, &leaf.veins, leaf.petiole_len);
         }
         Some("arches") => {

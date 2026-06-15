@@ -6,7 +6,12 @@ description = "Procedural leaf generator (venation + blade morphology)"
 
 # No verification yet — this is the pure-Rust prototype phase.
 # Later: depend on tactus vstd and verify the lib through the Lean backend.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 
 [profile.release]
 opt-level = 3
+lto = true
+panic = "abort"

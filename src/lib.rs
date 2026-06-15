@@ -17,6 +17,9 @@ pub mod venation;
 pub mod svg;
 pub mod raster;
 
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
 /// The scalar type for all geometry. Today this is `f64`; it is the single
 /// point we will generalize when verification begins (see module docs).
 pub type Scalar = f64;

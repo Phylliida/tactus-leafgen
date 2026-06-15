@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>tactus-leafgen · leaf studio</title>
+<style>
+  :root { --green:#3f6418; --green2:#5a7d2a; --bg:#fbfdf6; --panel:#f1f6e8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui, sans-serif; color:#243016; background:var(--bg); }
+  header { padding:10px 16px; background:var(--green); color:#eef6df; }
+  header h1 { margin:0; font-size:16px; font-weight:600; letter-spacing:.3px; }
+  header span { opacity:.8; font-size:12px; }
+  .wrap { display:flex; gap:0; height:calc(100vh - 44px); }
+  .controls { width:330px; flex:0 0 330px; overflow-y:auto; padding:14px 16px; background:var(--panel); border-right:1px solid #dce6c8; }
+  .preview { flex:1; display:flex; align-items:center; justify-content:center; padding:14px; overflow:auto; }
+  .preview svg { max-width:100%; max-height:calc(100vh - 80px); height:auto; filter:drop-shadow(0 3px 8px rgba(60,90,30,.18)); }
+  .row { margin:10px 0; }
+  .row label { display:flex; justify-content:space-between; font-weight:600; color:var(--green); margin-bottom:3px; }
+  .row label .val { font-weight:400; color:#6a7a52; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--green2); }
+  select { width:100%; padding:5px; border:1px solid #cdd9b6; border-radius:6px; background:#fff; }
+  .group { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:#8a9a6e; margin:16px 0 4px; border-bottom:1px solid #dce6c8; padding-bottom:2px; }
+  .tpl { width:100%; padding:7px; font-size:14px; font-weight:600; }
+  .hint { font-size:11px; color:#8a9a6e; margin-top:2px; }
+  button { margin-top:6px; padding:6px 10px; border:1px solid #cdd9b6; border-radius:6px; background:#fff; cursor:pointer; }
+  button:hover { background:#eaf2da; }
+</style>
+</head>
+<body>
+<header><h1>🍃 tactus-leafgen — leaf studio</h1> <span>procedural leaf morphology · verified-Rust core compiled to WASM</span></header>
+<div class="wrap">
+  <div class="controls">
+    <div class="group">Template</div>
+    <select id="template" class="tpl"></select>
+    <div class="hint">Pick a preset, then tweak the sliders below.</div>
+
+    <div class="group">Family</div>
+    <div class="row"><select id="kind">
+      <option value="0">Pinnate blade (simple / lobed)</option>
+      <option value="1">Maple (palmately lobed)</option>
+      <option value="2">Ash (pinnately compound)</option>
+      <option value="3">Horse chestnut (palmately compound)</option>
+      <option value="4">Clover (trifoliate)</option>
+    </select></div>
+
+    <div class="group">Outline</div>
+    <div class="row"><label>length <span class="val" id="length_v"></span></label><input type="range" id="length" min="4" max="16" step="0.5"></div>
+    <div class="row"><label>half&#8209;width <span class="val" id="half_width_v"></span></label><input type="range" id="half_width" min="0.6" max="5" step="0.1"></div>
+    <div class="row"><label>base shape&nbsp;a <span class="val" id="a_v"></span></label><input type="range" id="a" min="0.5" max="3" step="0.05"></div>
+    <div class="row"><label>apex shape&nbsp;b <span class="val" id="b_v"></span></label><input type="range" id="b" min="0.5" max="3.5" step="0.05"></div>
+
+    <div class="group">Margin <span style="text-transform:none;color:#8a9a6e">(pinnate blade)</span></div>
+    <div class="row"><select id="margin">
+      <option value="0">entire</option><option value="1">serrate</option>
+      <option value="2">dentate</option><option value="3">crenate</option>
+    </select></div>
+    <div class="row"><label>teeth <span class="val" id="n_teeth_v"></span></label><input type="range" id="n_teeth" min="0" max="40" step="1"></div>
+    <div class="row"><label>tooth size <span class="val" id="amp_v"></span></label><input type="range" id="amp" min="0" max="0.5" step="0.01"></div>
+
+    <div class="group">Lobing / leaflets</div>
+    <div class="row"><label>lobe / leaflet count <span class="val" id="lobe_n_v"></span></label><input type="range" id="lobe_n" min="0" max="9" step="1"></div>
+    <div class="row"><label>lobe depth <span class="val" id="lobe_depth_v"></span></label><input type="range" id="lobe_depth" min="0" max="0.9" step="0.05"></div>
+
+    <div class="group">Venation</div>
+    <div class="row"><label>secondary type</label><select id="arch">
+      <option value="0">craspedodromous (to margin)</option>
+      <option value="1">brochidodromous (looping)</option>
+      <option value="2">eucamptodromous (fading)</option>
+    </select></div>
+    <div class="row"><label>secondaries <span class="val" id="n_sec_v"></span></label><input type="range" id="n_sec" min="3" max="12" step="1"></div>
+    <div class="row"><label>seed <span class="val" id="seed_v"></span></label><input type="range" id="seed" min="0" max="200" step="1"></div>
+    <button id="randomize">🎲 random seed</button>
+  </div>
+  <div class="preview"><div id="out">loading…</div></div>
+</div>
+
+<script>
+const FIELDS = ["length","half_width","a","b","margin","n_teeth","amp","lobe_n","lobe_depth","arch","n_sec","seed"];
+const TEMPLATES = {
+  "Ovate":            {kind:0,length:10,half_width:3.2,a:1.3,b:2.2,margin:0,n_teeth:24,amp:0.24,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42},
+  "Obovate":          {kind:0,length:10,half_width:3.2,a:2.2,b:1.3,margin:0,n_teeth:24,amp:0.24,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42},
+  "Elliptic":         {kind:0,length:10,half_width:3.0,a:1.7,b:1.7,margin:0,n_teeth:24,amp:0.24,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42},
+  "Lanceolate":       {kind:0,length:12,half_width:1.9,a:1.5,b:2.7,margin:0,n_teeth:24,amp:0.18,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:8,seed:42},
+  "Serrate (birch)":  {kind:0,length:10,half_width:3.2,a:1.3,b:2.2,margin:1,n_teeth:24,amp:0.24,lobe_n:0,lobe_depth:0.55,arch:0,n_sec:7,seed:42},
+  "Dentate":          {kind:0,length:10,half_width:3.2,a:1.4,b:2.0,margin:2,n_teeth:16,amp:0.30,lobe_n:0,lobe_depth:0.55,arch:0,n_sec:7,seed:42},
+  "Crenate":          {kind:0,length:10,half_width:3.2,a:1.5,b:1.9,margin:3,n_teeth:13,amp:0.32,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42},
+  "Oak (lobed)":      {kind:0,length:11,half_width:3.0,a:1.5,b:1.8,margin:0,n_teeth:0,amp:0.0,lobe_n:6,lobe_depth:0.55,arch:0,n_sec:7,seed:42},
+  "Maple":            {kind:1,length:7,half_width:3.2,a:1.5,b:1.8,margin:0,n_teeth:0,amp:0.0,lobe_n:5,lobe_depth:0.5,arch:0,n_sec:7,seed:42},
+  "Ash (compound)":   {kind:2,length:10,half_width:3.2,a:1.3,b:2.2,margin:1,n_teeth:15,amp:0.07,lobe_n:5,lobe_depth:0.55,arch:1,n_sec:6,seed:42},
+  "Horse chestnut":   {kind:3,length:10,half_width:3.2,a:2.1,b:1.4,margin:0,n_teeth:0,amp:0.0,lobe_n:7,lobe_depth:0.55,arch:1,n_sec:6,seed:42},
+  "Clover":           {kind:4,length:10,half_width:3.2,a:2.1,b:1.4,margin:0,n_teeth:0,amp:0.0,lobe_n:3,lobe_depth:0.55,arch:1,n_sec:6,seed:42},
+};
+
+let wasm = null;
+const el = id => document.getElementById(id);
+const out = el("out");
+
+function setControls(t) {
+  el("kind").value = t.kind;
+  for (const f of FIELDS) el(f).value = t[f];
+  updateLabels();
+}
+function updateLabels() {
+  for (const f of FIELDS) { const v = el(f+"_v"); if (v) v.textContent = el(f).value; }
+}
+function render() {
+  if (!wasm) return;
+  const args = [Number(el("kind").value), ...FIELDS.map(f => Number(el(f).value))];
+  try {
+    wasm.generate(...args);
+    const ptr = wasm.result_ptr(), len = wasm.result_len();
+    const bytes = new Uint8Array(wasm.memory.buffer, ptr, len);
+    out.innerHTML = new TextDecoder().decode(bytes);
+  } catch (e) {
+    out.textContent = "render error: " + e;
+  }
+}
+let pending = false;
+function scheduleRender() {
+  updateLabels();
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => { pending = false; render(); });
+}
+
+async function main() {
+  const tpl = el("template");
+  for (const name of Object.keys(TEMPLATES)) {
+    const o = document.createElement("option"); o.value = name; o.textContent = name; tpl.appendChild(o);
+  }
+  tpl.value = "Maple";
+  tpl.addEventListener("change", () => { setControls(TEMPLATES[tpl.value]); render(); });
+
+  el("kind").addEventListener("change", scheduleRender);
+  for (const f of FIELDS) el(f).addEventListener("input", scheduleRender);
+  el("randomize").addEventListener("click", () => { el("seed").value = Math.floor(Math.random()*201); scheduleRender(); });
+
+  const bytes = await (await fetch("leafgen.wasm")).arrayBuffer();
+  const { instance } = await WebAssembly.instantiate(bytes, {});
+  wasm = instance.exports;
+
+  setControls(TEMPLATES["Maple"]);
+  render();
+}
+main();
+</script>
+</body>
+</html>

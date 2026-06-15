@@ -9,7 +9,7 @@
 
 use crate::rng::Rng;
 use crate::vec2::Vec2;
-use crate::venation::VeinGraph;
+use crate::venation::{self, AnastomoseParams, MinorParams, VeinGraph};
 use crate::Scalar;
 
 #[derive(Clone, Debug)]
@@ -29,13 +29,29 @@ pub struct PalmateBlade {
 impl PalmateBlade {
     /// Five-lobed maple.
     pub fn maple() -> Self {
-        let l = 7.0;
+        PalmateBlade::palmate(5, 7.0)
+    }
+
+    /// Generic palmately-lobed blade: `n` lobes (odd looks best) of size `scale`.
+    pub fn palmate(n: usize, scale: Scalar) -> Self {
+        let n = n.max(3);
+        let max_ang = ((n as Scalar - 1.0) * 0.40).min(2.0);
+        let mut angles = Vec::with_capacity(n);
+        let mut lengths = Vec::with_capacity(n);
+        let mut widths = Vec::with_capacity(n);
+        for i in 0..n {
+            let frac = i as Scalar / (n as Scalar - 1.0);
+            let ang = -max_ang + 2.0 * max_ang * frac;
+            angles.push(ang);
+            lengths.push(scale * (0.72 + 0.28 * ang.cos())); // longer toward the centre
+            widths.push((max_ang / (n as Scalar - 1.0) * 0.95).clamp(0.28, 0.5));
+        }
         PalmateBlade {
-            angles: vec![0.0, 0.84, -0.84, 1.62, -1.62], // 0, ±48°, ±93°
-            lengths: vec![l, 0.92 * l, 0.92 * l, 0.74 * l, 0.74 * l],
-            widths: vec![0.40, 0.38, 0.38, 0.36, 0.36],
-            base_radius: 0.11 * l,
-            span: 2.05, // ~117°
+            angles,
+            lengths,
+            widths,
+            base_radius: 0.11 * scale,
+            span: max_ang + 0.3,
         }
     }
 
@@ -93,6 +109,27 @@ impl PalmateBlade {
         }
         pts
     }
+}
+
+/// Assemble a full palmate leaf: primaries + reticulate minor venation.
+/// Returns (outline, veins, petiole_len).
+pub fn assemble_palmate(blade: &PalmateBlade, seed: u64, density: Scalar, outline_n: usize) -> (Vec<Vec2>, VeinGraph, Scalar) {
+    let mut veins = build_palmate_major(blade);
+    let max_len = blade.lengths.iter().cloned().fold(0.0_f64, Scalar::max);
+    let f = max_len / 10.0;
+    let minor = MinorParams {
+        influence_radius: 0.6 * f,
+        kill_radius: 0.10 * f,
+        step: 0.09 * f,
+        seed_clearance: 0.16 * f,
+        max_iters: 400,
+        max_order: 4,
+    };
+    let mut rng = Rng::new(seed);
+    let n_sources = (5000.0 * f * f * density).clamp(500.0, 6000.0) as usize;
+    venation::grow_minor(&mut veins, blade.sample_sources(n_sources, &mut rng), &minor);
+    venation::anastomose(&mut veins, &AnastomoseParams { radius: 0.17 * f, ancestor_depth: 4 });
+    (blade.outline(outline_n), veins, max_len * 0.18)
 }
 
 /// Build the major (primary) venation: a vein from the origin to each lobe tip,
