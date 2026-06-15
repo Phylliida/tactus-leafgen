@@ -111,6 +111,44 @@ fn main() {
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");
             generate(seed, &Blade::ovate(), SecondaryArch::Eucamptodromous, false, "leaf_eucamp");
         }
+        Some("bench") => {
+            use std::time::Instant;
+            let opts = RenderOpts::default();
+
+            // kind-0 leaf: time each phase separately.
+            let blade = Blade::ovate().with_margin(Margin::serrate());
+            let mp = MajorParams { arch: SecondaryArch::Craspedodromous, ..MajorParams::default() };
+            let t = Instant::now();
+            let mut v = major::build_major(&blade, &mp);
+            let t_major = t.elapsed();
+            let mut rng = Rng::new(42);
+            let src = blade.sample_sources(5000, &mut rng);
+            let t = Instant::now();
+            venation::grow_minor(&mut v, src, &MinorParams::default());
+            let t_minor = t.elapsed();
+            let t = Instant::now();
+            venation::anastomose(&mut v, &AnastomoseParams::default());
+            let t_ana = t.elapsed();
+            let t = Instant::now();
+            let svg = svg::render(&[blade.outline(900)], &v, 1.4, &opts);
+            let t_svg = t.elapsed();
+            println!(
+                "ovate ({} edges): major {:?}  grow_minor {:?}  anastomose {:?}  svg {:?} ({} KB)",
+                v.edges.len(), t_major, t_minor, t_ana, t_svg, svg.len() / 1024
+            );
+
+            // ash (compound) assembly vs svg.
+            let t = Instant::now();
+            let leaf = compound::pinnately_compound(42, 5, 1.0);
+            let t_ash = t.elapsed();
+            let t = Instant::now();
+            let svg = svg::render(&leaf.laminae, &leaf.veins, leaf.petiole_len, &opts);
+            let t_svg2 = t.elapsed();
+            println!(
+                "ash   ({} edges): assemble {:?}  svg {:?} ({} KB)",
+                leaf.veins.edges.len(), t_ash, t_svg2, svg.len() / 1024
+            );
+        }
         other => {
             let seed: u64 = other.and_then(|s| s.parse().ok()).unwrap_or(0xC0FFEE);
             let arch = match args.next().as_deref() {
