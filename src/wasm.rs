@@ -7,6 +7,7 @@
 use crate::blade::{Blade, Lobing, Margin, MarginType};
 use crate::compound;
 use crate::major::SecondaryArch;
+use crate::monocot;
 use crate::palmate::{self, PalmateBlade};
 use crate::svg::{self, RenderOpts};
 use crate::vec2::Vec2;
@@ -120,6 +121,17 @@ pub extern "C" fn generate(
         4 => {
             let leaf = compound::palmately_compound(seed, 3, 38.0, 0.45);
             (leaf.laminae, leaf.veins, leaf.petiole_len)
+        }
+        5 => {
+            let mb = monocot::MonocotBlade {
+                length: length.max(6.0),
+                half_width: half_width.max(0.4),
+                base_rise: 0.05,
+                plateau_end: 0.5,
+                apex_exp: b.clamp(0.6, 2.6),
+            };
+            let (ol, v, pl) = monocot::build_monocot_venation(&mb, lobe_n.max(3), (n_sec as usize).max(2));
+            (vec![ol], v, pl)
         }
         _ => {
             let (ol, v) = compound::assemble(&Blade::ovate(), SecondaryArch::Brochidodromous, 7, seed, 0.55, 600);
