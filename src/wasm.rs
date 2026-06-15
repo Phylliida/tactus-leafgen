@@ -60,6 +60,7 @@ fn margin_of(kind: i32, n_teeth: usize, amp: f64) -> Margin {
         2 => MarginType::Dentate,
         3 => MarginType::Crenate,
         4 => MarginType::DoublySerrate,
+        5 => MarginType::Spinose,
         _ => MarginType::Entire,
     };
     Margin { kind: k, n_teeth, amp }
@@ -91,6 +92,8 @@ pub extern "C" fn generate(
     arch: f64,
     n_sec: f64,
     seed: f64,
+    cordate: f64,
+    asymmetry: f64,
 ) {
     let seed = seed as u64;
     let lobe_n = lobe_n as usize;
@@ -99,7 +102,9 @@ pub extern "C" fn generate(
     let (laminae, veins, petiole_len): (Vec<Vec<Vec2>>, VeinGraph, f64) = match kind as i32 {
         0 => {
             let mut blade = Blade::shape(length.max(1.0), half_width.max(0.3), a.max(0.3), b.max(0.3))
-                .with_margin(margin_of(margin as i32, n_teeth as usize, amp));
+                .with_margin(margin_of(margin as i32, n_teeth as usize, amp))
+                .with_cordate(cordate.max(0.0))
+                .with_asymmetry(asymmetry.clamp(-0.8, 0.8));
             if lobe_n > 0 {
                 blade = blade.with_lobing(Lobing::pinnate(lobe_n, lobe_depth));
             }

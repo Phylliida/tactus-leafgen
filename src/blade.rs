@@ -27,6 +27,12 @@ use std::f64::consts::PI;
 const LOBE_LO: Scalar = 0.05;
 const LOBE_HI: Scalar = 0.95;
 
+/// Quadratic Bézier point.
+fn bez(p0: Vec2, c: Vec2, p1: Vec2, s: Scalar) -> Vec2 {
+    let u = 1.0 - s;
+    p0.scale(u * u).add(c.scale(2.0 * u * s)).add(p1.scale(s * s))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MarginType {
     Entire,
@@ -34,6 +40,7 @@ pub enum MarginType {
     Dentate,       // symmetric outward-pointing teeth
     Crenate,       // rounded scallops
     DoublySerrate, // big teeth that are themselves serrated (birch, elm)
+    Spinose,       // sharp, widely-spaced spines (holly)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -59,6 +66,9 @@ impl Margin {
     }
     pub fn doubly_serrate() -> Self {
         Margin { kind: MarginType::DoublySerrate, n_teeth: 9, amp: 0.34 }
+    }
+    pub fn spinose() -> Self {
+        Margin { kind: MarginType::Spinose, n_teeth: 7, amp: 0.5 }
     }
 }
 
@@ -94,6 +104,12 @@ pub struct Blade {
     peak: Scalar,
     pub margin: Margin,
     pub lobing: Lobing,
+    /// Basal lobes below the petiole, depth as a fraction of length (0 = none,
+    /// cordate / heart-shaped base when > 0).
+    pub cordate: Scalar,
+    /// Base asymmetry ∈ [-1, 1]: one half-base wider than the other (oblique
+    /// base, e.g. elm). 0 = bilaterally symmetric.
+    pub asymmetry: Scalar,
 }
 
 impl Blade {
@@ -108,6 +124,8 @@ impl Blade {
             peak,
             margin: Margin::entire(),
             lobing: Lobing::none(),
+            cordate: 0.0,
+            asymmetry: 0.0,
         }
     }
 
@@ -119,6 +137,26 @@ impl Blade {
     pub fn with_lobing(mut self, lobing: Lobing) -> Self {
         self.lobing = lobing;
         self
+    }
+
+    pub fn with_cordate(mut self, depth: Scalar) -> Self {
+        self.cordate = depth;
+        self
+    }
+
+    pub fn with_asymmetry(mut self, asym: Scalar) -> Self {
+        self.asymmetry = asym;
+        self
+    }
+
+    /// Side-aware half-width: applies base asymmetry (`side` = +1 right / −1 left).
+    fn half_width_side(&self, t: Scalar, side: Scalar) -> Scalar {
+        let w = self.half_width_at(t);
+        if self.asymmetry == 0.0 {
+            return w;
+        }
+        let base_emphasis = (1.0 - t / 0.35).max(0.0); // strongest at the base
+        w * (1.0 + side * self.asymmetry * base_emphasis)
     }
 
     /// Pinnately-lobed, oak-like (rounded lobes).
@@ -177,18 +215,19 @@ impl Blade {
             .collect()
     }
 
-    /// Is point `p` inside the smooth blade? (Teeth project outward from the
-    /// smooth curve, so the smooth region is contained in the real leaf —
-    /// sources sampled here are always inside.)
+    /// Is point `p` inside the smooth blade body? (Teeth project outward and
+    /// basal cordate lobes hang below — both ignored here, so sources sampled
+    /// in the body are always inside the real leaf.)
     pub fn contains(&self, p: Vec2) -> bool {
         if p.y < 0.0 || p.y > self.length {
             return false;
         }
-        p.x.abs() <= self.half_width_at(p.y / self.length)
+        let side = if p.x >= 0.0 { 1.0 } else { -1.0 };
+        p.x.abs() <= self.half_width_side(p.y / self.length, side)
     }
 
     fn smooth_pt(&self, t: Scalar, side: Scalar) -> Vec2 {
-        Vec2::new(side * self.half_width_at(t), t * self.length)
+        Vec2::new(side * self.half_width_side(t, side), t * self.length)
     }
 
     /// Outward unit normal to the smooth margin at `t` on the given side.
@@ -222,6 +261,8 @@ impl Blade {
             MarginType::Serrate => ph,
             // big sawtooth with three smaller sawteeth riding on it
             MarginType::DoublySerrate => 0.6 * ph + 0.4 * (ph * 3.0).fract(),
+            // sharp narrow spine in the middle of each (otherwise flat) period
+            MarginType::Spinose => (1.0 - (2.0 * ph - 1.0).abs() * 2.6).max(0.0),
         };
         self.margin.amp * prof
     }
@@ -236,16 +277,46 @@ impl Blade {
         }
     }
 
-    /// Outline polygon (with teeth): right chain base→apex, then left apex→base.
+    /// Outline polygon (with teeth + optional cordate base): right chain
+    /// base→apex, then left apex→base, with basal lobes spliced in when cordate.
     pub fn outline(&self, samples: usize) -> Vec<Vec2> {
-        let mut pts = Vec::with_capacity(2 * samples + 2);
+        let mut pts = Vec::with_capacity(2 * samples + 28);
+        let t0 = if self.cordate > 0.0 { 0.12 } else { 0.0 };
+        if self.cordate > 0.0 {
+            pts.extend(self.base_lobe(1.0, t0, true)); // sinus → right blade base
+        }
         for i in 0..=samples {
-            pts.push(self.margin_pt(i as Scalar / samples as Scalar, 1.0));
+            let t = t0 + (1.0 - t0) * i as Scalar / samples as Scalar;
+            pts.push(self.margin_pt(t, 1.0));
         }
         for i in (0..=samples).rev() {
-            pts.push(self.margin_pt(i as Scalar / samples as Scalar, -1.0));
+            let t = t0 + (1.0 - t0) * i as Scalar / samples as Scalar;
+            pts.push(self.margin_pt(t, -1.0));
+        }
+        if self.cordate > 0.0 {
+            pts.extend(self.base_lobe(-1.0, t0, false)); // left blade base → sinus
         }
         pts
+    }
+
+    /// One basal lobe curve (quadratic Bézier bulging below the petiole).
+    fn base_lobe(&self, side: Scalar, t0: Scalar, entering: bool) -> Vec<Vec2> {
+        let sinus = Vec2::new(0.0, 0.0);
+        let bw = self.half_width_side(t0, side);
+        let blade_base = Vec2::new(side * bw, t0 * self.length);
+        let ctrl = Vec2::new(side * bw * 1.3, -self.cordate * self.length);
+        let n = 12;
+        let mut v = Vec::with_capacity(n);
+        if entering {
+            for k in 0..n {
+                v.push(bez(sinus, ctrl, blade_base, k as Scalar / n as Scalar));
+            }
+        } else {
+            for k in 1..=n {
+                v.push(bez(blade_base, ctrl, sinus, k as Scalar / n as Scalar));
+            }
+        }
+        v
     }
 
     /// Max horizontal half-extent including teeth (for sizing renders).
