@@ -17,8 +17,8 @@ pub struct RenderOpts {
 impl Default for RenderOpts {
     fn default() -> Self {
         RenderOpts {
-            target_height_px: 820.0,
-            pad_px: 24.0,
+            target_height_px: 1500.0,
+            pad_px: 30.0,
             petiole_frac: 0.14,
             min_vein_px: 0.5,
             max_vein_px: 5.0,

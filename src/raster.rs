@@ -103,6 +103,23 @@ impl Canvas {
         }
     }
 
+    /// Extract a sub-rectangle as a new canvas (clamped to bounds).
+    pub fn crop(&self, x0: usize, y0: usize, w: usize, h: usize) -> Canvas {
+        let w = w.min(self.w.saturating_sub(x0));
+        let h = h.min(self.h.saturating_sub(y0));
+        let mut out = Canvas::new(w, h, [255, 255, 255]);
+        for y in 0..h {
+            for x in 0..w {
+                let si = 3 * ((y + y0) * self.w + (x + x0));
+                let di = 3 * (y * w + x);
+                out.px[di] = self.px[si];
+                out.px[di + 1] = self.px[si + 1];
+                out.px[di + 2] = self.px[si + 2];
+            }
+        }
+        out
+    }
+
     pub fn write_png(&self, path: &str) -> std::io::Result<()> {
         // Raw image: each scanline prefixed by filter byte 0 (none).
         let mut raw = Vec::with_capacity(self.h * (1 + self.w * 3));
