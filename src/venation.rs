@@ -75,20 +75,26 @@ impl VeinGraph {
         deg
     }
 
-    /// `node` and up to `k` of its ancestors.
-    fn ancestry(&self, node: usize, k: usize) -> Vec<usize> {
-        let mut chain = vec![node];
+    /// Write `node` and up to `k` of its ancestors into `buf`; return the count.
+    /// Allocation-free (caller supplies a small stack buffer).
+    fn ancestry_into(&self, node: usize, k: usize, buf: &mut [usize]) -> usize {
+        let mut len = 1;
+        buf[0] = node;
         let mut x = node;
         for _ in 0..k {
+            if len >= buf.len() {
+                break;
+            }
             match self.parents[x] {
                 Some(p) => {
                     x = p;
-                    chain.push(x);
+                    buf[len] = x;
+                    len += 1;
                 }
                 None => break,
             }
         }
-        chain
+        len
     }
 }
 
@@ -176,16 +182,19 @@ pub fn grow_minor(graph: &mut VeinGraph, mut sources: Vec<Vec2>, params: &MinorP
         .max(params.kill_radius)
         .max(1e-6);
 
+    // One spatial grid, grown incrementally as veins are added (rebuilding it
+    // every iteration was the dominant cost).
+    let mut grid = build_node_grid(&graph.nodes, cell);
+
     // Drop sources near the seed (major) veins, so minor veins grow into the
     // gaps (the future areole interiors) rather than as stubs on the majors.
-    {
-        let grid = build_node_grid(&graph.nodes, cell);
-        sources.retain(|s| {
-            let (b, d) = nearest_in_grid(&graph.nodes, &grid, cell, *s);
-            !(b != usize::MAX && d <= clear_sq)
-        });
-    }
+    sources.retain(|s| {
+        let (b, d) = nearest_in_grid(&graph.nodes, &grid, cell, *s);
+        !(b != usize::MAX && d <= clear_sq)
+    });
 
+    let mut dir_sum: Vec<Vec2> = Vec::new();
+    let mut counts: Vec<u32> = Vec::new();
     let mut iters = 0usize;
     for _ in 0..params.max_iters {
         if sources.is_empty() {
@@ -193,9 +202,11 @@ pub fn grow_minor(graph: &mut VeinGraph, mut sources: Vec<Vec2>, params: &MinorP
         }
         iters += 1;
 
-        let grid = build_node_grid(&graph.nodes, cell);
-        let mut dir_sum = vec![Vec2::zero(); graph.nodes.len()];
-        let mut counts = vec![0u32; graph.nodes.len()];
+        let n = graph.nodes.len();
+        dir_sum.clear();
+        dir_sum.resize(n, Vec2::zero());
+        counts.clear();
+        counts.resize(n, 0);
         for s in &sources {
             let (b, d) = nearest_in_grid(&graph.nodes, &grid, cell, *s);
             if b != usize::MAX && d <= di_sq {
@@ -204,9 +215,9 @@ pub fn grow_minor(graph: &mut VeinGraph, mut sources: Vec<Vec2>, params: &MinorP
             }
         }
 
-        // Gather growth first (don't mutate the graph while reading it).
-        let mut to_add: Vec<(usize, Vec2, u8)> = Vec::new();
-        for i in 0..graph.nodes.len() {
+        // Grow one new node per influenced node, inserting it into the grid.
+        let mut grew = false;
+        for i in 0..n {
             if counts[i] == 0 {
                 continue;
             }
@@ -215,18 +226,17 @@ pub fn grow_minor(graph: &mut VeinGraph, mut sources: Vec<Vec2>, params: &MinorP
                 continue;
             }
             let order = (graph.node_order[i] + 1).clamp(2, params.max_order);
-            to_add.push((i, graph.nodes[i].add(n_hat.scale(params.step)), order));
+            let pos = graph.nodes[i].add(n_hat.scale(params.step));
+            let idx = graph.add_child(i, pos, order);
+            grid.entry(grid_key(pos, cell)).or_default().push(idx);
+            grew = true;
         }
-        if to_add.is_empty() {
+        if !grew {
             break;
         }
-        for (parent, pos, order) in to_add {
-            graph.add_child(parent, pos, order);
-        }
 
-        let grid2 = build_node_grid(&graph.nodes, cell);
         sources.retain(|s| {
-            let (b, d) = nearest_in_grid(&graph.nodes, &grid2, cell, *s);
+            let (b, d) = nearest_in_grid(&graph.nodes, &grid, cell, *s);
             !(b != usize::MAX && d <= dk_sq)
         });
     }
@@ -272,15 +282,14 @@ pub fn anastomose(graph: &mut VeinGraph, params: &AnastomoseParams) -> usize {
 
     // A tip is consumed once it lands; target nodes are NOT consumed, so a vein
     // can be a junction for several incoming veinlets.
-    let mut landed = vec![false; graph.nodes.len()];
     let mut count = 0usize;
+    let depth = params.ancestor_depth.min(7);
+    let mut at = [0usize; 8];
+    let mut au = [0usize; 8];
     for &t in &tips {
-        if landed[t] {
-            continue;
-        }
         let pt = graph.nodes[t];
         let (kx, ky) = grid_key(pt, cell);
-        let at = graph.ancestry(t, params.ancestor_depth);
+        let atn = graph.ancestry_into(t, depth, &mut at);
         let mut best = usize::MAX;
         let mut best_d = r_sq;
         for dx in -1..=1 {
@@ -289,7 +298,7 @@ pub fn anastomose(graph: &mut VeinGraph, params: &AnastomoseParams) -> usize {
                     continue;
                 };
                 for &u in bucket {
-                    if u == t || at.contains(&u) {
+                    if u == t || at[..atn].contains(&u) {
                         continue;
                     }
                     let d = graph.nodes[u].dist_sq(pt);
@@ -297,8 +306,8 @@ pub fn anastomose(graph: &mut VeinGraph, params: &AnastomoseParams) -> usize {
                         continue;
                     }
                     // Reject if u is on t's branch (shared recent ancestor).
-                    let au = graph.ancestry(u, params.ancestor_depth);
-                    if at.iter().any(|x| au.contains(x)) {
+                    let aun = graph.ancestry_into(u, depth, &mut au);
+                    if at[..atn].iter().any(|x| au[..aun].contains(x)) {
                         continue;
                     }
                     best_d = d;
@@ -309,7 +318,6 @@ pub fn anastomose(graph: &mut VeinGraph, params: &AnastomoseParams) -> usize {
         if best != usize::MAX {
             let order = graph.node_order[t].max(graph.node_order[best]);
             graph.add_edge(t, best, order);
-            landed[t] = true;
             count += 1;
         }
     }
