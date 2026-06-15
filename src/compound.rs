@@ -24,11 +24,20 @@ fn place(base: Vec2, d: Vec2, p: Vec2) -> Vec2 {
     Vec2::new(base.x + p.x * d.y + p.y * d.x, base.y - p.x * d.x + p.y * d.y)
 }
 
-/// Build one leaflet (outline + venation), venation params scaled to its size.
-fn build_leaflet(blade: &Blade, arch: SecondaryArch, seed: u64) -> (Vec<Vec2>, VeinGraph) {
+/// Assemble a midrib-based leaf: major venation + reticulate minor venation,
+/// with venation params auto-scaled to the blade size. `density` scales the
+/// source count (1.0 = full); `outline_n` is the outline sample count.
+pub fn assemble(
+    blade: &Blade,
+    arch: SecondaryArch,
+    n_sec: usize,
+    seed: u64,
+    density: Scalar,
+    outline_n: usize,
+) -> (Vec<Vec2>, VeinGraph) {
     let mp = MajorParams {
         arch,
-        n_secondaries: 6,
+        n_secondaries: n_sec.max(1),
         first_t: 0.14,
         last_t: 0.82,
         ..MajorParams::default()
@@ -46,18 +55,22 @@ fn build_leaflet(blade: &Blade, arch: SecondaryArch, seed: u64) -> (Vec<Vec2>, V
     };
     let mut rng = Rng::new(seed);
     let area_scale = (blade.length * blade.half_width) / 32.0;
-    let n_sources = (5000.0 * area_scale).clamp(400.0, 3000.0) as usize;
+    let n_sources = (5000.0 * area_scale * density).clamp(300.0, 6000.0) as usize;
     venation::grow_minor(&mut veins, blade.sample_sources(n_sources, &mut rng), &minor);
     venation::anastomose(&mut veins, &AnastomoseParams { radius: 0.17 * f, ancestor_depth: 4 });
 
-    (blade.outline(300), veins)
+    (blade.outline(outline_n), veins)
+}
+
+fn build_leaflet(blade: &Blade, arch: SecondaryArch, seed: u64, density: Scalar) -> (Vec<Vec2>, VeinGraph) {
+    assemble(blade, arch, 6, seed, density, 300)
 }
 
 /// Pinnately compound (ash/walnut): leaflet pairs along a rachis + a terminal
 /// leaflet (odd-pinnate).
-pub fn pinnately_compound(seed: u64) -> Leaf {
+pub fn pinnately_compound(seed: u64, n_pairs: usize, density: Scalar) -> Leaf {
+    let n_pairs = n_pairs.max(2);
     let rachis_len = 12.0;
-    let n_pairs = 5;
     let petiolule = 0.25;
     let div = 60.0_f64.to_radians();
 
@@ -89,7 +102,7 @@ pub fn pinnately_compound(seed: u64) -> Leaf {
         for (k, &s) in [1.0 as Scalar, -1.0].iter().enumerate() {
             let d = Vec2::new(s * div.sin(), div.cos()).normalized();
             let base = attach.add(d.scale(petiolule));
-            let (ol, vl) = build_leaflet(&leaflet, SecondaryArch::Brochidodromous, seed + (i * 2 + k) as u64 * 17 + 1);
+            let (ol, vl) = build_leaflet(&leaflet, SecondaryArch::Brochidodromous, seed + (i * 2 + k) as u64 * 17 + 1, density);
             let off = veins.append_transformed(&vl, |p| place(base, d, p));
             veins.add_edge(rn, off, 1); // petiolule
             laminae.push(ol.iter().map(|p| place(base, d, *p)).collect());
@@ -99,7 +112,7 @@ pub fn pinnately_compound(seed: u64) -> Leaf {
     let top = *rachis.last().unwrap();
     let d = Vec2::new(0.0, 1.0);
     let base = veins.nodes[top.1].add(d.scale(petiolule));
-    let (ol, vl) = build_leaflet(&terminal, SecondaryArch::Brochidodromous, seed + 999);
+    let (ol, vl) = build_leaflet(&terminal, SecondaryArch::Brochidodromous, seed + 999, density);
     let off = veins.append_transformed(&vl, |p| place(base, d, p));
     veins.add_edge(top.1, off, 1);
     laminae.push(ol.iter().map(|p| place(base, d, *p)).collect());
@@ -109,7 +122,7 @@ pub fn pinnately_compound(seed: u64) -> Leaf {
 
 /// Palmately compound (horse chestnut): `n` leaflets radiating from the petiole
 /// tip. `n == 3` gives a trifoliate (clover).
-pub fn palmately_compound(seed: u64, n: usize, spread_deg: Scalar) -> Leaf {
+pub fn palmately_compound(seed: u64, n: usize, spread_deg: Scalar, density: Scalar) -> Leaf {
     let mut veins = VeinGraph::new();
     let center = veins.add_node(Vec2::new(0.0, 0.0), 0);
     let petiolule = 0.2;
@@ -124,7 +137,7 @@ pub fn palmately_compound(seed: u64, n: usize, spread_deg: Scalar) -> Leaf {
         let ang = -spread + 2.0 * spread * frac;
         let d = Vec2::new(ang.sin(), ang.cos()).normalized();
         let base = veins.nodes[center].add(d.scale(petiolule));
-        let (ol, vl) = build_leaflet(&leaflet, SecondaryArch::Brochidodromous, seed + i as u64 * 31 + 3);
+        let (ol, vl) = build_leaflet(&leaflet, SecondaryArch::Brochidodromous, seed + i as u64 * 31 + 3, density);
         let off = veins.append_transformed(&vl, |p| place(base, d, p));
         veins.add_edge(center, off, 0); // thick petiolule
         laminae.push(ol.iter().map(|p| place(base, d, *p)).collect());
