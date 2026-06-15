@@ -69,7 +69,9 @@
 
     <div class="group">Base <span style="text-transform:none;color:#8a9a6e">(pinnate blade)</span></div>
     <div class="row"><label>cordate (heart) <span class="val" id="cordate_v"></span></label><input type="range" id="cordate" min="0" max="0.3" step="0.02"></div>
+    <div class="row"><label>base dir <span class="val" id="base_dir_v"></span> <span class="hint" style="margin:0">hastate→cordate→sagittate</span></label><input type="range" id="base_dir" min="0" max="1" step="0.05"></div>
     <div class="row"><label>asymmetry <span class="val" id="asymmetry_v"></span></label><input type="range" id="asymmetry" min="-0.6" max="0.6" step="0.05"></div>
+    <div class="row"><label>apex notch <span class="val" id="apex_notch_v"></span></label><input type="range" id="apex_notch" min="0" max="0.35" step="0.02"></div>
 
     <div class="group">Venation</div>
     <div class="row"><label>secondary type</label><select id="arch">
@@ -85,8 +87,8 @@
 </div>
 
 <script>
-const FIELDS = ["length","half_width","a","b","margin","n_teeth","amp","lobe_n","lobe_depth","arch","n_sec","seed","cordate","asymmetry"];
-const DEFAULTS = {cordate:0, asymmetry:0};
+const FIELDS = ["length","half_width","a","b","margin","n_teeth","amp","lobe_n","lobe_depth","arch","n_sec","seed","cordate","asymmetry","base_dir","apex_notch"];
+const DEFAULTS = {cordate:0, asymmetry:0, base_dir:0.5, apex_notch:0};
 const TEMPLATES = {
   "Ovate":            {kind:0,length:10,half_width:3.2,a:1.3,b:2.2,margin:0,n_teeth:24,amp:0.24,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42},
   "Obovate":          {kind:0,length:10,half_width:3.2,a:2.2,b:1.3,margin:0,n_teeth:24,amp:0.24,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42},
@@ -108,6 +110,9 @@ const TEMPLATES = {
   "Lilac (cordate)":  {kind:0,length:10,half_width:3.4,a:1.0,b:2.0,margin:0,n_teeth:0,amp:0.0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:7,seed:42,cordate:0.16,asymmetry:0},
   "Holly (spinose)":  {kind:0,length:11,half_width:3.0,a:1.5,b:1.8,margin:5,n_teeth:7,amp:0.5,lobe_n:0,lobe_depth:0.55,arch:0,n_sec:7,seed:42,cordate:0,asymmetry:0},
   "Elm (oblique)":    {kind:0,length:10,half_width:3.0,a:1.3,b:2.2,margin:1,n_teeth:22,amp:0.2,lobe_n:0,lobe_depth:0.55,arch:0,n_sec:7,seed:42,cordate:0,asymmetry:0.45},
+  "Sagittate (arrow)":{kind:0,length:12,half_width:2.4,a:0.95,b:2.6,margin:0,n_teeth:0,amp:0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:6,seed:42,cordate:0.2,asymmetry:0,base_dir:1.0,apex_notch:0},
+  "Hastate (halberd)":{kind:0,length:11,half_width:2.6,a:1.0,b:2.4,margin:0,n_teeth:0,amp:0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:6,seed:42,cordate:0.16,asymmetry:0,base_dir:0.0,apex_notch:0},
+  "Tulip-tree (notch)":{kind:0,length:9,half_width:3.4,a:1.9,b:1.5,margin:0,n_teeth:0,amp:0,lobe_n:0,lobe_depth:0.55,arch:1,n_sec:6,seed:42,cordate:0,asymmetry:0,base_dir:0.5,apex_notch:0.22},
 };
 
 let wasm = null;

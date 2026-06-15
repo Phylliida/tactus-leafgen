@@ -160,6 +160,20 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
         }
     }
 
+    // A vein into each basal lobe (cordate/sagittate/hastate), so they aren't bare.
+    let base_node = mid_idx[0];
+    for &side in &[1.0 as Scalar, -1.0] {
+        if let Some(tip) = blade.basal_lobe_tip(side) {
+            let o = g.nodes[base_node];
+            let steps = 5;
+            let mut prev = base_node;
+            for k in 1..=steps {
+                let f = k as Scalar / steps as Scalar;
+                prev = g.add_child(prev, o.add(tip.sub(o).scale(f)), 1);
+            }
+        }
+    }
+
     // Brochidodromous: join adjacent anchors with outward-bowed arches.
     if arch == SecondaryArch::Brochidodromous {
         for side in &anchors {

@@ -140,6 +140,18 @@ fn main() {
             let blade = Blade::ovate().with_margin(Margin::serrate()).with_asymmetry(0.45);
             generate(seed, &blade, SecondaryArch::Craspedodromous, true, "leaf_elm");
         }
+        Some("sagittate") => {
+            let blade = Blade::shape(12.0, 2.4, 0.95, 2.6).with_cordate(0.2).with_base_dir(1.0);
+            generate(seed, &blade, SecondaryArch::Brochidodromous, true, "leaf_sagittate");
+        }
+        Some("hastate") => {
+            let blade = Blade::shape(11.0, 2.6, 1.0, 2.4).with_cordate(0.16).with_base_dir(0.0);
+            generate(seed, &blade, SecondaryArch::Brochidodromous, true, "leaf_hastate");
+        }
+        Some("tuliptree") => {
+            let blade = Blade::shape(9.0, 3.4, 1.9, 1.5).with_apex_notch(0.22);
+            generate(seed, &blade, SecondaryArch::Brochidodromous, true, "leaf_tuliptree");
+        }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
             generate(seed, &Blade::ovate(), SecondaryArch::Brochidodromous, false, "leaf_broch");
