@@ -23,6 +23,10 @@ use crate::Scalar;
 
 use std::f64::consts::PI;
 
+/// Midrib span over which lobes are distributed (leaves the base/apex tips smooth).
+const LOBE_LO: Scalar = 0.05;
+const LOBE_HI: Scalar = 0.95;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MarginType {
     Entire,
@@ -54,6 +58,26 @@ impl Margin {
     }
 }
 
+/// Pinnate lobing: a low-frequency modulation of the half-width whose sinuses
+/// cut toward the midrib. `n` lobes per side, `depth ∈ [0,1]` (0 unlobed, →1
+/// sinus reaches the midrib), `sharp` shapes the sinus (>1 narrower sinuses /
+/// broader lobes).
+#[derive(Clone, Copy, Debug)]
+pub struct Lobing {
+    pub n: usize,
+    pub depth: Scalar,
+    pub sharp: Scalar,
+}
+
+impl Lobing {
+    pub fn none() -> Self {
+        Lobing { n: 0, depth: 0.0, sharp: 1.0 }
+    }
+    pub fn pinnate(n: usize, depth: Scalar) -> Self {
+        Lobing { n, depth, sharp: 1.1 }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Blade {
     pub length: Scalar,
@@ -65,18 +89,37 @@ pub struct Blade {
     /// Peak of tᵃ(1−t)ᵇ, so the profile peaks at exactly `half_width`.
     peak: Scalar,
     pub margin: Margin,
+    pub lobing: Lobing,
 }
 
 impl Blade {
     pub fn shape(length: Scalar, half_width: Scalar, a: Scalar, b: Scalar) -> Self {
         let tstar = a / (a + b);
         let peak = tstar.powf(a) * (1.0 - tstar).powf(b);
-        Blade { length, half_width, a, b, peak, margin: Margin::entire() }
+        Blade {
+            length,
+            half_width,
+            a,
+            b,
+            peak,
+            margin: Margin::entire(),
+            lobing: Lobing::none(),
+        }
     }
 
     pub fn with_margin(mut self, margin: Margin) -> Self {
         self.margin = margin;
         self
+    }
+
+    pub fn with_lobing(mut self, lobing: Lobing) -> Self {
+        self.lobing = lobing;
+        self
+    }
+
+    /// Pinnately-lobed, oak-like (rounded lobes).
+    pub fn oak() -> Self {
+        Blade::shape(11.0, 3.0, 1.5, 1.8).with_lobing(Lobing::pinnate(6, 0.55))
     }
 
     // ---- named shape presets (entire margin; add one with `.with_margin`) ----
@@ -94,12 +137,40 @@ impl Blade {
         Blade::shape(12.0, 1.9, 1.5, 2.7)
     }
 
-    /// Smooth half-width at normalized midrib position `t ∈ [0, 1]`.
+    /// Half-width at normalized midrib position `t ∈ [0, 1]`, including lobing.
     pub fn half_width_at(&self, t: Scalar) -> Scalar {
         if t <= 0.0 || t >= 1.0 {
             return 0.0;
         }
-        self.half_width * t.powf(self.a) * (1.0 - t).powf(self.b) / self.peak
+        let smooth = self.half_width * t.powf(self.a) * (1.0 - t).powf(self.b) / self.peak;
+        smooth * self.lobe_factor(t)
+    }
+
+    /// Lobing multiplier ∈ [1−depth, 1]: 1 at lobe tips, 1−depth at sinuses.
+    fn lobe_factor(&self, t: Scalar) -> Scalar {
+        if self.lobing.n == 0 {
+            return 1.0;
+        }
+        let (lo, hi) = (LOBE_LO, LOBE_HI);
+        if t <= lo || t >= hi {
+            return 1.0;
+        }
+        let phase = (t - lo) / (hi - lo) * self.lobing.n as Scalar;
+        let frac = phase.fract();
+        // sinus = 1 at lobe boundaries (frac 0/1), 0 at lobe centre (frac 0.5)
+        let sinus = (0.5 * (1.0 + (2.0 * PI * frac).cos())).powf(self.lobing.sharp);
+        1.0 - self.lobing.depth * sinus
+    }
+
+    /// Midrib positions of the lobe tips (empty if unlobed). One secondary vein
+    /// is routed to each.
+    pub fn lobe_centers(&self) -> Vec<Scalar> {
+        if self.lobing.n == 0 {
+            return Vec::new();
+        }
+        (0..self.lobing.n)
+            .map(|k| LOBE_LO + (k as Scalar + 0.5) / self.lobing.n as Scalar * (LOBE_HI - LOBE_LO))
+            .collect()
     }
 
     /// Is point `p` inside the smooth blade? (Teeth project outward from the
