@@ -6,6 +6,7 @@
 
 use crate::blade::{Blade, Lobing, Margin, MarginType};
 use crate::compound;
+use crate::ginkgo;
 use crate::major::SecondaryArch;
 use crate::monocot;
 use crate::palmate::{self, PalmateBlade};
@@ -131,6 +132,18 @@ pub extern "C" fn generate(
                 apex_exp: b.clamp(0.6, 2.6),
             };
             let (ol, v, pl) = monocot::build_monocot_venation(&mb, lobe_n.max(3), (n_sec as usize).max(2));
+            (vec![ol], v, pl)
+        }
+        6 => {
+            let r = length.max(5.0);
+            let fb = ginkgo::FanBlade {
+                radius: r,
+                spread: (0.4 + a * 0.3).clamp(0.5, 1.3),
+                notch: (lobe_depth * 0.5).clamp(0.0, 0.5),
+                notch_width: 0.16,
+            };
+            let fs = r / (n_sec.max(3.0));
+            let (ol, v, pl) = ginkgo::build_ginkgo_venation(&fb, lobe_n.max(2), fs, 0.13, 7);
             (vec![ol], v, pl)
         }
         _ => {

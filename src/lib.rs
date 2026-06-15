@@ -14,6 +14,7 @@ pub mod major;
 pub mod palmate;
 pub mod compound;
 pub mod monocot;
+pub mod ginkgo;
 pub mod venation;
 pub mod svg;
 pub mod raster;
