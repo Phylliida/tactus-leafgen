@@ -48,6 +48,23 @@ impl VeinGraph {
         i
     }
 
+    /// Append another graph's nodes/edges, mapping each node position through
+    /// `f` (used to place a leaflet's venation into a compound leaf). Returns
+    /// the index offset (= the appended graph's node 0).
+    pub fn append_transformed(&mut self, other: &VeinGraph, f: impl Fn(Vec2) -> Vec2) -> usize {
+        let off = self.nodes.len();
+        for (i, p) in other.nodes.iter().enumerate() {
+            self.nodes.push(f(*p));
+            self.node_order.push(other.node_order[i]);
+            self.parents.push(other.parents[i].map(|x| x + off));
+        }
+        for (k, &(a, b)) in other.edges.iter().enumerate() {
+            self.edges.push((a + off, b + off));
+            self.edge_order.push(other.edge_order[k]);
+        }
+        off
+    }
+
     /// Node degrees (incident edge counts).
     pub fn degrees(&self) -> Vec<u32> {
         let mut deg = vec![0u32; self.nodes.len()];

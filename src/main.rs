@@ -12,6 +12,7 @@
 //! Set LEAF_ZOOM=1 to also dump a native-res areole crop per leaf.
 
 use tactus_leafgen::blade::{Blade, Margin};
+use tactus_leafgen::compound;
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
 use tactus_leafgen::palmate::{self, PalmateBlade};
 use tactus_leafgen::raster;
@@ -20,10 +21,10 @@ use tactus_leafgen::svg::{self, RenderOpts};
 use tactus_leafgen::vec2::Vec2;
 use tactus_leafgen::venation::{self, AnastomoseParams, MinorParams, VeinGraph};
 
-fn finish(stem: &str, outline: &[Vec2], veins: &VeinGraph, petiole_len: f64) {
+fn finish(stem: &str, laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: f64) {
     let opts = RenderOpts::default();
-    std::fs::write(format!("{stem}.svg"), svg::render(outline, veins, petiole_len, &opts)).expect("svg");
-    let canvas = raster::render(outline, veins, petiole_len, &opts);
+    std::fs::write(format!("{stem}.svg"), svg::render(laminae, veins, petiole_len, &opts)).expect("svg");
+    let canvas = raster::render(laminae, veins, petiole_len, &opts);
     if std::env::var("LEAF_ZOOM").is_ok() {
         let (cw, ch) = (canvas.w, canvas.h);
         canvas
@@ -47,7 +48,7 @@ fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &
     }
 
     let petiole_len = blade.length * RenderOpts::default().petiole_frac;
-    finish(stem, &blade.outline(900), &veins, petiole_len);
+    finish(stem, &[blade.outline(900)], &veins, petiole_len);
 }
 
 fn generate_palmate(seed: u64, blade: &PalmateBlade, stem: &str) {
@@ -58,7 +59,7 @@ fn generate_palmate(seed: u64, blade: &PalmateBlade, stem: &str) {
     venation::anastomose(&mut veins, &AnastomoseParams::default());
 
     let petiole_len = blade.lengths.iter().cloned().fold(0.0_f64, f64::max) * 0.18;
-    finish(stem, &blade.outline(800), &veins, petiole_len);
+    finish(stem, &[blade.outline(800)], &veins, petiole_len);
 }
 
 fn main() {
@@ -98,6 +99,18 @@ fn main() {
         }
         Some("maple") => {
             generate_palmate(seed, &PalmateBlade::maple(), "leaf_maple");
+        }
+        Some("ash") => {
+            let leaf = compound::pinnately_compound(seed);
+            finish("leaf_ash", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+        }
+        Some("horsechestnut") => {
+            let leaf = compound::palmately_compound(seed, 7, 115.0);
+            finish("leaf_horsechestnut", &leaf.laminae, &leaf.veins, leaf.petiole_len);
+        }
+        Some("clover") => {
+            let leaf = compound::palmately_compound(seed, 3, 38.0);
+            finish("leaf_clover", &leaf.laminae, &leaf.veins, leaf.petiole_len);
         }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");

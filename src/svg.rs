@@ -46,8 +46,8 @@ pub fn vein_color(order: u8) -> (u8, u8, u8) {
     }
 }
 
-/// Bounding box (minx, miny, maxx, maxy) of the outline + veins + petiole tip.
-pub fn scene_bounds(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar) -> (Scalar, Scalar, Scalar, Scalar) {
+/// Bounding box (minx, miny, maxx, maxy) of the laminae + veins + petiole tip.
+pub fn scene_bounds(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar) -> (Scalar, Scalar, Scalar, Scalar) {
     let mut mnx = Scalar::INFINITY;
     let mut mny = Scalar::INFINITY;
     let mut mxx = -Scalar::INFINITY;
@@ -58,8 +58,10 @@ pub fn scene_bounds(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar) ->
         mxx = mxx.max(p.x);
         mxy = mxy.max(p.y);
     };
-    for p in outline {
-        acc(*p);
+    for poly in laminae {
+        for p in poly {
+            acc(*p);
+        }
     }
     for p in &veins.nodes {
         acc(*p);
@@ -69,11 +71,11 @@ pub fn scene_bounds(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar) ->
     (mnx, mny, mxx, mxy)
 }
 
-/// Render a leaf from its outline polygon + vein graph (shape-agnostic: works
-/// for both midrib-based and palmate blades). The petiole runs from (0,0) down
-/// by `petiole_len`.
-pub fn render(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar, opts: &RenderOpts) -> String {
-    let (minx, miny, maxx, maxy) = scene_bounds(outline, veins, petiole_len);
+/// Render a leaf from its lamina polygons + vein graph (shape-agnostic: simple,
+/// lobed, palmate, or compound — compound leaves pass one polygon per leaflet).
+/// The petiole runs from (0,0) down by `petiole_len`.
+pub fn render(laminae: &[Vec<Vec2>], veins: &VeinGraph, petiole_len: Scalar, opts: &RenderOpts) -> String {
+    let (minx, miny, maxx, maxy) = scene_bounds(laminae, veins, petiole_len);
     let world_h = (maxy - miny).max(1e-6);
     let world_w = (maxx - minx).max(1e-6);
     let scale = opts.target_height_px / world_h;
@@ -90,12 +92,14 @@ pub fn render(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar, opts: &R
     ));
     s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#fbfdf6\"/>\n");
 
-    s.push_str("<path d=\"");
-    for (i, p) in outline.iter().enumerate() {
-        let (x, y) = tx(*p);
-        s.push_str(&format!("{}{:.2} {:.2} ", if i == 0 { "M" } else { "L" }, x, y));
+    for poly in laminae {
+        s.push_str("<path d=\"");
+        for (i, p) in poly.iter().enumerate() {
+            let (x, y) = tx(*p);
+            s.push_str(&format!("{}{:.2} {:.2} ", if i == 0 { "M" } else { "L" }, x, y));
+        }
+        s.push_str("Z\" fill=\"#e7f3d4\" stroke=\"#5a7d2a\" stroke-width=\"2\"/>\n");
     }
-    s.push_str("Z\" fill=\"#e7f3d4\" stroke=\"#5a7d2a\" stroke-width=\"2\"/>\n");
 
     let (bx, by) = tx(Vec2::new(0.0, 0.0));
     let (px, py) = tx(Vec2::new(0.0, -petiole_len));
