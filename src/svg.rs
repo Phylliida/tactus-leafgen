@@ -1,6 +1,5 @@
 //! Minimal SVG renderer for a generated leaf (no dependencies).
 
-use crate::blade::Blade;
 use crate::vec2::Vec2;
 use crate::venation::VeinGraph;
 use crate::Scalar;
@@ -47,15 +46,39 @@ pub fn vein_color(order: u8) -> (u8, u8, u8) {
     }
 }
 
-pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> String {
-    let petiole_len = blade.length * opts.petiole_frac;
-    let world_h = blade.length + petiole_len;
+/// Bounding box (minx, miny, maxx, maxy) of the outline + veins + petiole tip.
+pub fn scene_bounds(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar) -> (Scalar, Scalar, Scalar, Scalar) {
+    let mut mnx = Scalar::INFINITY;
+    let mut mny = Scalar::INFINITY;
+    let mut mxx = -Scalar::INFINITY;
+    let mut mxy = -Scalar::INFINITY;
+    let mut acc = |p: Vec2| {
+        mnx = mnx.min(p.x);
+        mny = mny.min(p.y);
+        mxx = mxx.max(p.x);
+        mxy = mxy.max(p.y);
+    };
+    for p in outline {
+        acc(*p);
+    }
+    for p in &veins.nodes {
+        acc(*p);
+    }
+    acc(Vec2::new(0.0, 0.0));
+    acc(Vec2::new(0.0, -petiole_len));
+    (mnx, mny, mxx, mxy)
+}
+
+/// Render a leaf from its outline polygon + vein graph (shape-agnostic: works
+/// for both midrib-based and palmate blades). The petiole runs from (0,0) down
+/// by `petiole_len`.
+pub fn render(outline: &[Vec2], veins: &VeinGraph, petiole_len: Scalar, opts: &RenderOpts) -> String {
+    let (minx, miny, maxx, maxy) = scene_bounds(outline, veins, petiole_len);
+    let world_h = (maxy - miny).max(1e-6);
+    let world_w = (maxx - minx).max(1e-6);
     let scale = opts.target_height_px / world_h;
     let pad = opts.pad_px;
-    let ext = blade.half_extent();
-    let minx = -ext;
-    let maxy = blade.length;
-    let svg_w = (2.0 * ext) * scale + 2.0 * pad;
+    let svg_w = world_w * scale + 2.0 * pad;
     let svg_h = world_h * scale + 2.0 * pad;
 
     let tx = |p: Vec2| -> (Scalar, Scalar) { ((p.x - minx) * scale + pad, (maxy - p.y) * scale + pad) };
@@ -67,7 +90,6 @@ pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> String {
     ));
     s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#fbfdf6\"/>\n");
 
-    let outline = blade.outline(700);
     s.push_str("<path d=\"");
     for (i, p) in outline.iter().enumerate() {
         let (x, y) = tx(*p);

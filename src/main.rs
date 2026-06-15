@@ -4,6 +4,8 @@
 //!   cargo run --release                  # default ovate + serrate, closed venation
 //!   cargo run --release -- shapes        # ovate/obovate/elliptic/lanceolate
 //!   cargo run --release -- margins       # entire/serrate/dentate/crenate (ovate)
+//!   cargo run --release -- oak           # pinnately lobed
+//!   cargo run --release -- maple         # palmately lobed
 //!   cargo run --release -- arches        # cras/broch/eucamp (open venation)
 //!   cargo run --release -- <seed> <arch> # one leaf; arch = cras|broch|eucamp
 //!
@@ -11,27 +13,17 @@
 
 use tactus_leafgen::blade::{Blade, Margin};
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
+use tactus_leafgen::palmate::{self, PalmateBlade};
 use tactus_leafgen::raster;
 use tactus_leafgen::rng::Rng;
 use tactus_leafgen::svg::{self, RenderOpts};
-use tactus_leafgen::venation::{self, AnastomoseParams, MinorParams};
+use tactus_leafgen::vec2::Vec2;
+use tactus_leafgen::venation::{self, AnastomoseParams, MinorParams, VeinGraph};
 
-fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &str) {
-    let major_params = MajorParams { arch, ..MajorParams::default() };
-    let mut veins = major::build_major(blade, &major_params);
-
-    let mut rng = Rng::new(seed);
-    let sources = blade.sample_sources(5000, &mut rng);
-    venation::grow_minor(&mut veins, sources, &MinorParams::default());
-    let areoles = if closed {
-        venation::anastomose(&mut veins, &AnastomoseParams::default())
-    } else {
-        0
-    };
-
+fn finish(stem: &str, outline: &[Vec2], veins: &VeinGraph, petiole_len: f64) {
     let opts = RenderOpts::default();
-    std::fs::write(format!("{stem}.svg"), svg::render(blade, &veins, &opts)).expect("svg");
-    let canvas = raster::render(blade, &veins, &opts);
+    std::fs::write(format!("{stem}.svg"), svg::render(outline, veins, petiole_len, &opts)).expect("svg");
+    let canvas = raster::render(outline, veins, petiole_len, &opts);
     if std::env::var("LEAF_ZOOM").is_ok() {
         let (cw, ch) = (canvas.w, canvas.h);
         canvas
@@ -40,15 +32,33 @@ fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &
             .expect("zoom png");
     }
     canvas.write_png(&format!("{stem}.png")).expect("png");
+    println!("{stem}: {} nodes, {} edges", veins.nodes.len(), veins.edges.len());
+}
 
-    println!(
-        "{stem}: {:?} {} -> {} nodes, {} edges, {} areoles",
-        arch,
-        if closed { "closed" } else { "open" },
-        veins.nodes.len(),
-        veins.edges.len(),
-        areoles
-    );
+fn generate(seed: u64, blade: &Blade, arch: SecondaryArch, closed: bool, stem: &str) {
+    let major_params = MajorParams { arch, ..MajorParams::default() };
+    let mut veins = major::build_major(blade, &major_params);
+
+    let mut rng = Rng::new(seed);
+    let sources = blade.sample_sources(5000, &mut rng);
+    venation::grow_minor(&mut veins, sources, &MinorParams::default());
+    if closed {
+        venation::anastomose(&mut veins, &AnastomoseParams::default());
+    }
+
+    let petiole_len = blade.length * RenderOpts::default().petiole_frac;
+    finish(stem, &blade.outline(900), &veins, petiole_len);
+}
+
+fn generate_palmate(seed: u64, blade: &PalmateBlade, stem: &str) {
+    let mut veins = palmate::build_palmate_major(blade);
+    let mut rng = Rng::new(seed);
+    let sources = blade.sample_sources(5000, &mut rng);
+    venation::grow_minor(&mut veins, sources, &MinorParams::default());
+    venation::anastomose(&mut veins, &AnastomoseParams::default());
+
+    let petiole_len = blade.lengths.iter().cloned().fold(0.0_f64, f64::max) * 0.18;
+    finish(stem, &blade.outline(800), &veins, petiole_len);
 }
 
 fn main() {
@@ -68,16 +78,15 @@ fn main() {
             }
         }
         Some("margins") => {
+            use tactus_leafgen::blade::MarginType;
             for (name, m) in [
                 ("leaf_entire", Margin::entire()),
                 ("leaf_serrate", Margin::serrate()),
                 ("leaf_dentate", Margin::dentate()),
                 ("leaf_crenate", Margin::crenate()),
             ] {
-                let arch = if m.kind == tactus_leafgen::blade::MarginType::Serrate
-                    || m.kind == tactus_leafgen::blade::MarginType::Dentate
-                {
-                    SecondaryArch::Craspedodromous // toothed leaves usually run veins to teeth
+                let arch = if m.kind == MarginType::Serrate || m.kind == MarginType::Dentate {
+                    SecondaryArch::Craspedodromous
                 } else {
                     SecondaryArch::Brochidodromous
                 };
@@ -86,6 +95,9 @@ fn main() {
         }
         Some("oak") => {
             generate(seed, &Blade::oak(), SecondaryArch::Craspedodromous, true, "leaf_oak");
+        }
+        Some("maple") => {
+            generate_palmate(seed, &PalmateBlade::maple(), "leaf_maple");
         }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
@@ -99,8 +111,7 @@ fn main() {
                 Some("eucamp") => SecondaryArch::Eucamptodromous,
                 _ => SecondaryArch::Brochidodromous,
             };
-            let blade = Blade::ovate().with_margin(Margin::serrate());
-            generate(seed, &blade, arch, true, "leaf");
+            generate(seed, &Blade::ovate().with_margin(Margin::serrate()), arch, true, "leaf");
         }
     }
 }

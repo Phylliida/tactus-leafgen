@@ -11,6 +11,7 @@ pub mod vec2;
 pub mod rng;
 pub mod blade;
 pub mod major;
+pub mod palmate;
 pub mod venation;
 pub mod svg;
 pub mod raster;
