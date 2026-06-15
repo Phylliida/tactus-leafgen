@@ -104,9 +104,14 @@ pub fn build_major(blade: &Blade, p: &MajorParams) -> VeinGraph {
     // Lobed leaves run a vein straight to each lobe tip (craspedodromous).
     let arch = if lobed { SecondaryArch::Craspedodromous } else { p.arch };
 
-    // Midrib node parameters: uniform samples ∪ secondary origins, sorted.
+    // A notched apex removes the top centre, so the midrib must stop at the
+    // apical sinus rather than running up into the empty notch.
+    let top_t = if blade.apex_notch > 0.0 { 1.0 - blade.apex_notch } else { 1.0 };
+    let sec_ts: Vec<Scalar> = sec_ts.into_iter().filter(|&t| t <= top_t).collect();
+
+    // Midrib node parameters: uniform samples (capped at the sinus) ∪ origins.
     let mut ts: Vec<Scalar> = (0..=p.midrib_samples)
-        .map(|i| i as Scalar / p.midrib_samples as Scalar)
+        .map(|i| top_t * i as Scalar / p.midrib_samples as Scalar)
         .collect();
     ts.extend(sec_ts.iter().copied());
     ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
