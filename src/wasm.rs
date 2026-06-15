@@ -59,6 +59,7 @@ fn margin_of(kind: i32, n_teeth: usize, amp: f64) -> Margin {
         1 => MarginType::Serrate,
         2 => MarginType::Dentate,
         3 => MarginType::Crenate,
+        4 => MarginType::DoublySerrate,
         _ => MarginType::Entire,
     };
     Margin { kind: k, n_teeth, amp }
@@ -145,6 +146,10 @@ pub extern "C" fn generate(
             let fs = r / (n_sec.max(3.0));
             let (ol, v, pl) = ginkgo::build_ginkgo_venation(&fb, lobe_n.max(2), fs, 0.13, 7);
             (vec![ol], v, pl)
+        }
+        7 => {
+            let leaf = compound::bipinnately_compound(seed, lobe_n.max(2), (n_sec as usize).max(3));
+            (leaf.laminae, leaf.veins, leaf.petiole_len)
         }
         _ => {
             let (ol, v) = compound::assemble(&Blade::ovate(), SecondaryArch::Brochidodromous, 7, seed, 0.55, 600);

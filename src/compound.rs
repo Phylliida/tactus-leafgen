@@ -24,6 +24,10 @@ fn place(base: Vec2, d: Vec2, p: Vec2) -> Vec2 {
     Vec2::new(base.x + p.x * d.y + p.y * d.x, base.y - p.x * d.x + p.y * d.y)
 }
 
+fn rot(v: Vec2, ang: Scalar) -> Vec2 {
+    Vec2::new(v.x * ang.cos() - v.y * ang.sin(), v.x * ang.sin() + v.y * ang.cos())
+}
+
 /// Assemble a midrib-based leaf: major venation + reticulate minor venation,
 /// with venation params auto-scaled to the blade size. `density` scales the
 /// source count (1.0 = full); `outline_n` is the outline sample count.
@@ -55,7 +59,7 @@ pub fn assemble(
     };
     let mut rng = Rng::new(seed);
     let area_scale = (blade.length * blade.half_width) / 32.0;
-    let n_sources = (5000.0 * area_scale * density).clamp(300.0, 6000.0) as usize;
+    let n_sources = (5000.0 * area_scale * density).clamp(0.0, 6000.0) as usize;
     venation::grow_minor(&mut veins, blade.sample_sources(n_sources, &mut rng), &minor);
     venation::anastomose(&mut veins, &AnastomoseParams { radius: 0.17 * f, ancestor_depth: 4 });
 
@@ -116,6 +120,85 @@ pub fn pinnately_compound(seed: u64, n_pairs: usize, density: Scalar) -> Leaf {
     let off = veins.append_transformed(&vl, |p| place(base, d, p));
     veins.add_edge(top.1, off, 1);
     laminae.push(ol.iter().map(|p| place(base, d, *p)).collect());
+
+    Leaf { laminae, veins, petiole_len: rachis_len * 0.14 }
+}
+
+/// One pinna (a sub-rachis bearing a row of tiny leaflets) attached at
+/// `attach_node`, growing in direction `d`.
+fn place_pinna(
+    veins: &mut VeinGraph,
+    laminae: &mut Vec<Vec<Vec2>>,
+    leaflet: &Blade,
+    attach_node: usize,
+    d: Vec2,
+    pinna_len: Scalar,
+    n_leaflets: usize,
+    seed: &mut u64,
+) {
+    let attach = veins.nodes[attach_node];
+    let mut subprev = attach_node;
+    let mut subnodes = Vec::with_capacity(n_leaflets);
+    for j in 1..=n_leaflets {
+        let f = j as Scalar / n_leaflets as Scalar;
+        subprev = veins.add_child(subprev, attach.add(d.scale(pinna_len * f)), 1);
+        subnodes.push(subprev);
+    }
+    let leaf_dir = 72.0_f64.to_radians();
+    for &sn in &subnodes {
+        for &ls in &[1.0 as Scalar, -1.0] {
+            let ldir = rot(d, ls * leaf_dir);
+            let lbase = veins.nodes[sn].add(ldir.scale(0.03));
+            // tiny pinnules: midrib + a few secondaries only (density 0)
+            let (ol, vl) = assemble(leaflet, SecondaryArch::Craspedodromous, 3, *seed, 0.0, 90);
+            *seed = seed.wrapping_add(7);
+            let off = veins.append_transformed(&vl, |p| place(lbase, ldir, p));
+            veins.add_edge(sn, off, 2);
+            laminae.push(ol.iter().map(|p| place(lbase, ldir, *p)).collect());
+        }
+    }
+}
+
+/// Bipinnately compound (mimosa, jacaranda): a rachis bearing pinnae, each of
+/// which bears a row of tiny pinnules. Twice-recursive.
+pub fn bipinnately_compound(seed: u64, n_pinnae: usize, n_leaflets: usize) -> Leaf {
+    let n_pinnae = n_pinnae.max(2);
+    let n_leaflets = n_leaflets.max(3);
+    let rachis_len = 12.0;
+    let pinna_len = 4.2;
+    let div = 60.0_f64.to_radians();
+
+    let mut veins = VeinGraph::new();
+    let steps = 48;
+    let mut prev = veins.add_node(Vec2::new(0.0, 0.0), 0);
+    let mut rachis = vec![(0.0, prev)];
+    for k in 1..=steps {
+        let t = k as Scalar / steps as Scalar;
+        prev = veins.add_child(prev, Vec2::new(0.0, t * rachis_len), 0);
+        rachis.push((t, prev));
+    }
+    let nearest = |t: Scalar| {
+        rachis
+            .iter()
+            .min_by(|a, b| (a.0 - t).abs().partial_cmp(&(b.0 - t).abs()).unwrap())
+            .unwrap()
+            .1
+    };
+
+    let leaflet = Blade::shape(1.15, 0.34, 1.4, 1.8);
+    let mut laminae = Vec::new();
+    let mut sid = seed;
+
+    for i in 0..n_pinnae {
+        let t = 0.16 + (0.90 - 0.16) * i as Scalar / (n_pinnae as Scalar - 1.0);
+        let mn = nearest(t);
+        for &s in &[1.0 as Scalar, -1.0] {
+            let d = Vec2::new(s * div.sin(), div.cos()).normalized();
+            place_pinna(&mut veins, &mut laminae, &leaflet, mn, d, pinna_len, n_leaflets, &mut sid);
+        }
+    }
+    let top = rachis.last().unwrap().1;
+    place_pinna(&mut veins, &mut laminae, &leaflet, top, Vec2::new(0.0, 1.0), pinna_len, n_leaflets, &mut sid);
 
     Leaf { laminae, veins, petiole_len: rachis_len * 0.14 }
 }
