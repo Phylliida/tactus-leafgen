@@ -52,9 +52,10 @@ pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> String {
     let world_h = blade.length + petiole_len;
     let scale = opts.target_height_px / world_h;
     let pad = opts.pad_px;
-    let minx = -blade.half_width;
+    let ext = blade.half_extent();
+    let minx = -ext;
     let maxy = blade.length;
-    let svg_w = (2.0 * blade.half_width) * scale + 2.0 * pad;
+    let svg_w = (2.0 * ext) * scale + 2.0 * pad;
     let svg_h = world_h * scale + 2.0 * pad;
 
     let tx = |p: Vec2| -> (Scalar, Scalar) { ((p.x - minx) * scale + pad, (maxy - p.y) * scale + pad) };
@@ -66,7 +67,7 @@ pub fn render(blade: &Blade, veins: &VeinGraph, opts: &RenderOpts) -> String {
     ));
     s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#fbfdf6\"/>\n");
 
-    let outline = blade.outline(160);
+    let outline = blade.outline(700);
     s.push_str("<path d=\"");
     for (i, p) in outline.iter().enumerate() {
         let (x, y) = tx(*p);
