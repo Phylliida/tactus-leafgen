@@ -16,6 +16,7 @@ use tactus_leafgen::compound;
 use tactus_leafgen::major::{self, MajorParams, SecondaryArch};
 use tactus_leafgen::ginkgo;
 use tactus_leafgen::monocot;
+use tactus_leafgen::peltate;
 use tactus_leafgen::palmate::{self, PalmateBlade};
 use tactus_leafgen::raster;
 use tactus_leafgen::rng::Rng;
@@ -151,6 +152,14 @@ fn main() {
         Some("tuliptree") => {
             let blade = Blade::shape(9.0, 3.4, 1.9, 1.5).with_apex_notch(0.22);
             generate(seed, &blade, SecondaryArch::Brochidodromous, true, "leaf_tuliptree");
+        }
+        Some("lotus") => {
+            let (ol, v, pl) = peltate::assemble_peltate(&peltate::PeltateBlade::lotus(), 12, seed, 1.0, 360);
+            finish("leaf_lotus", &[ol], &v, pl);
+        }
+        Some("nasturtium") => {
+            let (ol, v, pl) = peltate::assemble_peltate(&peltate::PeltateBlade::nasturtium(), 9, seed, 1.0, 360);
+            finish("leaf_nasturtium", &[ol], &v, pl);
         }
         Some("arches") => {
             generate(seed, &Blade::ovate(), SecondaryArch::Craspedodromous, false, "leaf_cras");
